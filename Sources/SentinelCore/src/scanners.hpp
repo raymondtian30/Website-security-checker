@@ -24,6 +24,12 @@ public:
     static void run_owasp_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
     static void run_malware_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
     static void run_advanced_surface_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
+    static void run_deep_verification_pass(
+        const ScanConfig& config,
+        const CrawlData& crawl,
+        HttpClient& client,
+        std::vector<Finding>& findings
+    );
 };
 
 } // namespace sentinel

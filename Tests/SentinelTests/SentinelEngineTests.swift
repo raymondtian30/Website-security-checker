@@ -195,6 +195,7 @@ struct SentinelTestMain {
             if let envFinding = record.findings.first(where: { $0.rootCauseKey == "SERVER_EXPOSED_ENV_FILE" }) {
                 try assertFalse(envFinding.evidence.contains("super_secret_database_password_987"), "Raw password leaked in .env evidence")
                 try assertTrue(envFinding.evidence.contains("[REDACTED]"), "Expected redacted secret in .env evidence")
+                try assertTrue(envFinding.evidence.contains("[Deep Non-Destructive Verification Report]"), "Expected Stage 2 Deep Non-Destructive Verification trail in finding evidence")
             }
 
             try assertTrue(record.scoreBreakdown.overallScore <= 69, "Verified critical vulnerabilities must cap score at <= 69")

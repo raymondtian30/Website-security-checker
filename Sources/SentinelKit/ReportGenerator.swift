@@ -21,6 +21,7 @@ public struct ReportGenerator {
         let df = ISO8601DateFormatter()
         let dateStr = df.string(from: scan.timestamp)
         let sb = scan.scoreBreakdown
+        let safety = SecurityScorer.evaluateVisitorSafety(findings: scan.findings, overallScore: sb.overallScore)
 
         func esc(_ s: String) -> String {
             s.replacingOccurrences(of: "&", with: "&amp;")
@@ -99,6 +100,7 @@ public struct ReportGenerator {
                         <p><strong>Target:</strong> \(esc(scan.targetURL)) (\(esc(scan.targetDomain)))</p>
                         <p><strong>Assessment Date:</strong> \(esc(dateStr)) &nbsp;|&nbsp; <strong>Status:</strong> \(esc(scan.status))</p>
                         <p><strong>Scan Coverage:</strong> \(String(format: "%.0f%%", sb.coveragePercent)) &nbsp;|&nbsp; <strong>Endpoints Examined:</strong> \(scan.endpointsExamined)</p>
+                        <p><strong>Visitor Safety Rating:</strong> \(safety.safetyScore)/100 (Grade \(esc(safety.safetyGrade)) — \(esc(safety.verdictLabel))) &nbsp;|&nbsp; <strong>Malware Detected:</strong> \(safety.detectedMalware.count)</p>
                     </div>
                     <div class="score-box">
                         <div class="score-num">\(sb.overallScore)/100</div>
@@ -145,15 +147,18 @@ public struct ReportGenerator {
         let df = ISO8601DateFormatter()
         let dateStr = df.string(from: scan.timestamp)
         let sb = scan.scoreBreakdown
+        let pdfSafety = SecurityScorer.evaluateVisitorSafety(findings: scan.findings, overallScore: sb.overallScore)
 
         var lines: [String] = [
-            "WEBSITE SECURITY CHECKER — SECURITY AUDIT REPORT",
+            "SENTINAL — DEEP NON-DESTRUCTIVE SECURITY & MALWARE AUDIT REPORT",
             "======================================================================",
             "Target URL:          \(scan.targetURL)",
             "Target Domain:       \(scan.targetDomain)",
             "Assessment Date:     \(dateStr)",
             "Scan Status:         \(scan.status)",
             "Overall Score:       \(sb.overallScore) / 100 (Grade \(sb.letterGrade) - \(sb.postureMeaning))",
+            "Visitor Safety:      \(pdfSafety.safetyScore) / 100 (Grade \(pdfSafety.safetyGrade) - \(pdfSafety.verdictLabel))",
+            "Malware Detected:    \(pdfSafety.detectedMalware.count) Threat(s)",
             "Scan Coverage:       \(String(format: "%.0f%%", sb.coveragePercent)) | Endpoints Examined: \(scan.endpointsExamined)",
             "Scan Configuration:  Intensity=\(scan.configuration.intensity), RateLimit=\(scan.configuration.maxRequestsPerSecond) rps",
             "",

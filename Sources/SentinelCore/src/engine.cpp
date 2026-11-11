@@ -245,12 +245,11 @@ std::string Engine::run_scan(
     }
 
     std::set<std::string> emitted_ids;
-    auto emit_finding = [&](const Finding& f) {
+    std::vector<Finding> collected_findings;
+    auto collect_finding = [&](const Finding& f) {
         if (emitted_ids.insert(f.id).second) {
-            ++prog.findings_count;
-            if (on_finding_json) {
-                on_finding_json(serialize_finding_json(f));
-            }
+            collected_findings.push_back(f);
+            prog.findings_count = (int)collected_findings.size();
         }
     };
 
@@ -275,19 +274,33 @@ std::string Engine::run_scan(
             inc.safe_reproduction = "Re-run the scan with a higher maximum duration or without cancelling.";
             inc.remediation = "Complete the scan for full coverage.";
             inc.id = deterministic_hash_id(inc.root_cause_key + "|" + inc.affected_url);
-            emit_finding(inc);
+            collect_finding(inc);
             continue;
         }
 
         prog.current_module = enabled_tasks[i].name;
         emit_progress();
 
-        enabled_tasks[i].fn(config, crawl, client, emit_finding);
+        enabled_tasks[i].fn(config, crawl, client, collect_finding);
 
         if (!client.is_cancelled_or_timed_out()) {
             ++prog.checks_completed;
         }
         emit_progress();
+    }
+
+    // Stage 2: Deep Non-Destructive Verification Pass across discovered findings
+    if (!client.is_cancelled_or_timed_out() && !collected_findings.empty()) {
+        prog.current_module = "Deep Non-Destructive Verification & False-Positive Filtering";
+        emit_progress();
+        Scanners::run_deep_verification_pass(config, crawl, client, collected_findings);
+    }
+
+    // Stream verified & enriched findings to Swift bridge
+    for (const auto& f : collected_findings) {
+        if (on_finding_json) {
+            on_finding_json(serialize_finding_json(f));
+        }
     }
 
     prog.status = cancel_flag_.load() ? "Cancelled" : "Completed";
