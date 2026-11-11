@@ -84,6 +84,8 @@ struct MainContentView: View {
                     DashboardView(vm: vm)
                 case .scanConfig:
                     ScanConfigView(vm: vm)
+                case .malwareScanner:
+                    MalwareScannerView(vm: vm)
                 case .findings:
                     FindingsView(vm: vm)
                 case .investigation:

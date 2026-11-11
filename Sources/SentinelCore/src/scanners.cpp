@@ -1088,4 +1088,173 @@ void Scanners::run_owasp_scanner(const ScanConfig& config, const CrawlData& craw
     }
 }
 
+// ============================================================================
+// 11. Website Malware & Visitor Safety Scanner
+// ============================================================================
+void Scanners::run_malware_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit) {
+    (void)config;
+    (void)client;
+
+    // 1. Cryptojacker / Browser Coin Miner Signatures
+    static const std::regex cryptojacker_re(
+        R"((CoinHive\.Anonymous|coinhive\.min\.js|cryptoloot\.pro|deepMiner|stratum\+tcp://|WebAssembly\.instantiate[^\r\n;]*cryptonight|miner\.start\s*\())",
+        std::regex::icase
+    );
+
+    // 2. Obfuscated JavaScript Dropper / Eval Payload Signatures
+    static const std::regex obfuscated_dropper_re(
+        R"((eval\s*\(\s*atob\s*\([^)]+\)\s*\)|eval\s*\(\s*unescape\s*\([^)]+\)\s*\)|eval\s*\(\s*String\.fromCharCode\s*\((?:\s*\d+\s*,){5,}))",
+        std::regex::icase
+    );
+
+    // 3. Magecart / Payment Card Web Skimmer Signatures
+    static const std::regex web_skimmer_re(
+        R"((?:document\.querySelectorAll\s*\(\s*["']input\[name\*=(?:cc|card|cvv)|(?:cc_number|card_number|cvv2)[\s\S]{0,160}(?:navigator\.sendBeacon|new\s+Image\(\)\.src\s*=\s*["']https?://)))",
+        std::regex::icase
+    );
+
+    // 4. Hidden Exploit Kit Iframe (0x0 or display:none pointing to external URL)
+    static const std::regex hidden_iframe_re(
+        R"(<iframe\b[^>]*(?:width\s*=\s*["']?0["']?[^>]*height\s*=\s*["']?0["']?|style\s*=\s*["'][^"']*display\s*:\s*none[^"']*["'])[^>]*\bsrc\s*=\s*["'](https?://[^"']+)["'][^>]*>)",
+        std::regex::icase
+    );
+
+    // 5. Drive-By Executable Malware Download Injection
+    static const std::regex drive_by_re(
+        R"((?:window\.location(?:\.href)?\s*=\s*|<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]+url\s*=\s*|<iframe[^>]+src\s*=\s*)["']([^"']+\.(?:exe|scr|bat|ps1|hta|vbs|msi|apk))["'])",
+        std::regex::icase
+    );
+
+    // 6. Exposed Webshell / Backdoor Signatures
+    static const std::regex webshell_re(
+        R"((c99shell|r57shell|WSO\s+[0-9]\.[0-9]|b374k\s+shell|FilesMan|passthru\s*\(\s*\$_(?:GET|POST|REQUEST)))",
+        std::regex::icase
+    );
+
+    for (const auto& url : crawl.visited_urls) {
+        const auto& resp = crawl.responses.at(url);
+        std::smatch m;
+
+        if (std::regex_search(resp.body, m, cryptojacker_re)) {
+            emit(make_finding(
+                "MALWARE_CRYPTOJACKER",
+                "Malware Detected: Browser Cryptojacker / Cryptocurrency Miner",
+                "Malware & Visitor Safety",
+                "A08:2021-Software and Data Integrity Failures",
+                "Critical",
+                "High",
+                "Verified",
+                9.3,
+                url,
+                "Cryptojacker Script (" + m[1].str() + ")",
+                "Detected browser cryptomining signature in page source: `" + Redactor::redact(m[0].str(), 200) + "`",
+                "The webpage embeds unauthorized cryptocurrency mining code (`" + m[1].str() + "`) that hijacks visitor CPU/GPU resources upon visiting the page.",
+                "UNSAFE FOR VISITORS: Hijacks visitor device CPU/battery, degrades system performance, and indicates site compromise or malicious monetization.",
+                "Inspect the HTML/JS source of " + url + " for `" + m[1].str() + "`.",
+                "Remove the injected mining script immediately, audit CMS/server access logs for unauthorized file modifications, rotate deployment credentials, and enforce a strict Content-Security-Policy."
+            ));
+        }
+
+        if (std::regex_search(resp.body, m, obfuscated_dropper_re)) {
+            emit(make_finding(
+                "MALWARE_OBFUSCATED_DROPPER",
+                "Malware Detected: Obfuscated JavaScript Eval Dropper Payload",
+                "Malware & Visitor Safety",
+                "A08:2021-Software and Data Integrity Failures",
+                "Critical",
+                "High",
+                "Verified",
+                9.5,
+                url,
+                "Obfuscated Script Dropper",
+                "Matched encoded eval dropper pattern: `" + Redactor::redact(m[0].str(), 220) + "`",
+                "The page executes heavily obfuscated Base64/Hex/CharCode JavaScript via `eval()`, a primary technique used by malware droppers, exploit kits, and skimmer loaders.",
+                "UNSAFE FOR VISITORS: Executes concealed malicious payloads in the visitor's browser session.",
+                "Inspect the script tags on " + url + " containing `" + Redactor::redact(m[0].str(), 120) + "`.",
+                "Remove the obfuscated script block, restore clean templates from version control, and add `Content-Security-Policy` disallowing `'unsafe-eval'`."
+            ));
+        }
+
+        if (std::regex_search(resp.body, m, web_skimmer_re)) {
+            emit(make_finding(
+                "MALWARE_WEB_SKIMMER",
+                "Malware Detected: Magecart / Payment Card Skimmer Script",
+                "Malware & Visitor Safety",
+                "A08:2021-Software and Data Integrity Failures",
+                "Critical",
+                "High",
+                "Verified",
+                9.8,
+                url,
+                "Payment Skimmer Script",
+                "Matched payment input exfiltration signature: `" + Redactor::redact(m[0].str(), 220) + "`",
+                "JavaScript on this page hooks payment card fields (`card_number`/`cvv`) and exfiltrates them to an external collection endpoint.",
+                "CRITICAL VISITOR DANGER: Visitors entering payment cards or personal data on this site will have their financial details stolen in real time.",
+                "Inspect script blocks on " + url + " referencing payment fields and external beacon endpoints.",
+                "Take affected checkout pages offline immediately, purge injected scripts, audit third-party dependencies with Subresource Integrity (SRI), and notify affected users."
+            ));
+        }
+
+        if (std::regex_search(resp.body, m, hidden_iframe_re)) {
+            emit(make_finding(
+                "MALWARE_HIDDEN_IFRAME",
+                "Malware Detected: Hidden Exploit / Drive-By Iframe Injection",
+                "Malware & Visitor Safety",
+                "A08:2021-Software and Data Integrity Failures",
+                "High",
+                "High",
+                "Verified",
+                8.8,
+                url,
+                m[1].str(),
+                "Matched hidden 0x0 / display:none iframe loading `" + m[1].str() + "`:\n" + Redactor::redact(m[0].str(), 220),
+                "The page embeds an invisible `<iframe>` (`width=0 height=0` or `display:none`) that silently loads content from `" + m[1].str() + "`.",
+                "UNSAFE FOR VISITORS: Hidden iframes are used by exploit kits and traffic distribution systems (TDS) to silently redirect visitors to malware or browser exploits.",
+                "Inspect the HTML DOM of " + url + " for invisible `<iframe>` elements.",
+                "Remove the unauthorized `<iframe>`, audit server files for injection, and restrict allowed frame sources via `Content-Security-Policy: frame-src 'self'`."
+            ));
+        }
+
+        if (std::regex_search(resp.body, m, drive_by_re)) {
+            emit(make_finding(
+                "MALWARE_DRIVE_BY_DOWNLOAD",
+                "Malware Detected: Drive-By Executable Download Injection (" + m[1].str() + ")",
+                "Malware & Visitor Safety",
+                "A08:2021-Software and Data Integrity Failures",
+                "Critical",
+                "High",
+                "Verified",
+                9.6,
+                url,
+                m[1].str(),
+                "Matched automatic executable payload trigger: `" + Redactor::redact(m[0].str(), 220) + "`",
+                "The page automatically redirects or forces a download of an executable binary/script payload (`" + m[1].str() + "`).",
+                "CRITICAL VISITOR DANGER: Attempts to infect visitor computers with trojans, ransomware, or info-stealers via drive-by download.",
+                "Inspect " + url + " source code for automatic redirect/download triggers pointing to `" + m[1].str() + "`.",
+                "Remove the malicious redirect/download code immediately and perform a full incident response audit of the web server."
+            ));
+        }
+
+        if (std::regex_search(resp.body, m, webshell_re)) {
+            emit(make_finding(
+                "MALWARE_WEBSHELL_BACKDOOR",
+                "Malware Detected: Server Webshell / Backdoor Signature",
+                "Malware & Visitor Safety",
+                "A05:2021-Security Misconfiguration",
+                "Critical",
+                "High",
+                "Verified",
+                9.9,
+                url,
+                "Webshell Signature (" + m[1].str() + ")",
+                "Matched webshell indicator in response: `" + Redactor::redact(m[0].str(), 200) + "`",
+                "The endpoint contains signatures of a remote administrative webshell/backdoor (`" + m[1].str() + "`).",
+                "CRITICAL COMPROMISE: Indicates active remote attacker control over the web server.",
+                "Inspect the response of " + url + " for `" + m[1].str() + "`.",
+                "Isolate the compromised server immediately, remove all backdoor files, rebuild from clean immutable infrastructure, and rotate all credentials."
+            ));
+        }
+    }
+}
+
 } // namespace sentinel

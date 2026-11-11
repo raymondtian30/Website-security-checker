@@ -165,12 +165,24 @@ struct SentinelTestMain {
                 "INFO_INTERNAL_IP",
                 "API_CORS_ARBITRARY_ORIGIN_CREDS",
                 "OWASP_MISSING_SRI",
-                "OWASP_OUTDATED_JS_LIB"
+                "OWASP_OUTDATED_JS_LIB",
+                "MALWARE_CRYPTOJACKER",
+                "MALWARE_OBFUSCATED_DROPPER",
+                "MALWARE_WEB_SKIMMER",
+                "MALWARE_HIDDEN_IFRAME"
             ]
 
             for expected in expectedCauses {
                 try assertTrue(rootCauses.contains(expected), "Missing expected finding root cause: \(expected). Found: \(rootCauses)")
             }
+
+            let visitorSafety = SecurityScorer.evaluateVisitorSafety(
+                findings: record.findings,
+                overallScore: record.scoreBreakdown.overallScore
+            )
+            try assertFalse(visitorSafety.isSafeToVisit, "Infected target must be marked Unsafe to Visit")
+            try assertEqual(visitorSafety.safetyGrade, "F")
+            try assertTrue(visitorSafety.detectedMalware.count >= 4, "Expected at least 4 malware threats detected")
 
             if let envFinding = record.findings.first(where: { $0.rootCauseKey == "SERVER_EXPOSED_ENV_FILE" }) {
                 try assertFalse(envFinding.evidence.contains("super_secret_database_password_987"), "Raw password leaked in .env evidence")
@@ -208,6 +220,15 @@ struct SentinelTestMain {
             )
             try assertTrue(record.scoreBreakdown.overallScore >= 95, "Expected A+ score (>=95) on hardened routes, got \(record.scoreBreakdown.overallScore)")
             try assertEqual(record.scoreBreakdown.letterGrade, "A+")
+
+            let cleanSafety = SecurityScorer.evaluateVisitorSafety(
+                findings: record.findings,
+                overallScore: record.scoreBreakdown.overallScore
+            )
+            try assertTrue(cleanSafety.isSafeToVisit, "Clean hardened target must be marked Safe to Visit")
+            try assertEqual(cleanSafety.safetyScore, 100)
+            try assertEqual(cleanSafety.safetyGrade, "A+")
+            try assertTrue(cleanSafety.detectedMalware.isEmpty, "Clean target must have 0 malware threats")
         }
 
         // Test 5: Scan Cancellation & Incomplete Coverage Handling

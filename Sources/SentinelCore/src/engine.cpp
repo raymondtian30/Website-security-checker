@@ -181,7 +181,8 @@ std::string Engine::run_scan(
         {"API Security", Scanners::run_api_scanner},
         {"SQL Injection", Scanners::run_sqli_scanner},
         {"Cross-Site Scripting (XSS)", Scanners::run_xss_scanner},
-        {"OWASP Top 10", Scanners::run_owasp_scanner}
+        {"OWASP Top 10", Scanners::run_owasp_scanner},
+        {"Malware & Visitor Safety", Scanners::run_malware_scanner}
     };
 
     std::vector<ScannerTask> enabled_tasks;

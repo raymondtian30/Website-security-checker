@@ -86,8 +86,45 @@ public enum ScanCategory: String, Codable, CaseIterable, Identifiable, Sendable 
     case sqli = "SQL Injection"
     case xss = "Cross-Site Scripting (XSS)"
     case owasp = "OWASP Top 10"
+    case malware = "Malware & Visitor Safety"
 
     public var id: String { rawValue }
+}
+
+public struct VisitorSafetyEvaluation: Codable, Equatable, Sendable {
+    public var safetyScore: Int // 1 to 100
+    public var safetyGrade: String // F to A+
+    public var isSafeToVisit: Bool
+    public var verdictLabel: String
+    public var verdictDescription: String
+    public var detectedMalware: [VulnerabilityFinding]
+    public var checkedCategories: [String]
+
+    public init(
+        safetyScore: Int,
+        safetyGrade: String,
+        isSafeToVisit: Bool,
+        verdictLabel: String,
+        verdictDescription: String,
+        detectedMalware: [VulnerabilityFinding],
+        checkedCategories: [String] = [
+            "Magecart & Payment Card Web Skimmers",
+            "Browser Cryptojackers & Coin Miners",
+            "Obfuscated JavaScript Eval Droppers",
+            "Hidden Exploit Kit & TDS Iframes",
+            "Drive-By Executable Malware Downloads",
+            "Webshells & Server Backdoors",
+            "Cleartext Credential & Phishing Harvesters"
+        ]
+    ) {
+        self.safetyScore = max(1, min(100, safetyScore))
+        self.safetyGrade = safetyGrade
+        self.isSafeToVisit = isSafeToVisit
+        self.verdictLabel = verdictLabel
+        self.verdictDescription = verdictDescription
+        self.detectedMalware = detectedMalware
+        self.checkedCategories = checkedCategories
+    }
 }
 
 public struct ScanConfiguration: Codable, Equatable, Sendable {

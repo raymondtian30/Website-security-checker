@@ -173,6 +173,84 @@ public struct SecurityScorer {
         return (baseGrade, baseMeaning)
     }
 
+    public static func evaluateVisitorSafety(findings: [VulnerabilityFinding], overallScore: Int) -> VisitorSafetyEvaluation {
+        let active = findings.filter { !$0.isResolved && $0.status != .incomplete }
+        let malwareFindings = active.filter {
+            $0.category == "Malware & Visitor Safety" || $0.rootCauseKey.hasPrefix("MALWARE_")
+        }
+        let clientRiskFindings = active.filter {
+            $0.category == "Cross-Site Scripting (XSS)" ||
+            $0.rootCauseKey == "TLS_MIXED_CONTENT" ||
+            $0.rootCauseKey == "TLS_INVALID_CERTIFICATE" ||
+            $0.rootCauseKey == "AUTH_HTTP_LOGIN_FORM"
+        }
+
+        var penalty = 0
+        for m in malwareFindings {
+            switch m.severity {
+            case .critical: penalty += 45
+            case .high: penalty += 32
+            case .medium: penalty += 18
+            case .low, .informational: penalty += 8
+            }
+        }
+        for c in clientRiskFindings {
+            switch c.severity {
+            case .critical: penalty += 18
+            case .high: penalty += 12
+            case .medium: penalty += 5
+            case .low, .informational: penalty += 2
+            }
+        }
+
+        // Factor in general security hygiene lightly if no active malware is present
+        if malwareFindings.isEmpty && overallScore < 75 {
+            penalty += (75 - overallScore) / 3
+        }
+
+        var safetyScore = max(1, min(100, 100 - penalty))
+        if !malwareFindings.isEmpty && safetyScore > 45 {
+            safetyScore = 35 // Any active malware forces an F (Unsafe to Visit) rating
+        }
+
+        let safetyGrade: String
+        switch safetyScore {
+        case 95...100: safetyGrade = "A+"
+        case 90...94: safetyGrade = "A"
+        case 80...89: safetyGrade = "B"
+        case 70...79: safetyGrade = "C"
+        case 60...69: safetyGrade = "D"
+        default: safetyGrade = "F"
+        }
+
+        let isSafe = malwareFindings.isEmpty && safetyScore >= 70
+        let verdictLabel: String
+        let verdictDescription: String
+
+        if !malwareFindings.isEmpty {
+            verdictLabel = "UNSAFE TO VISIT — MALWARE DETECTED"
+            verdictDescription = "DANGER: Sentinel detected \(malwareFindings.count) active malware threat(s) on this website (Visitor Safety Score: \(safetyScore)/100, Grade \(safetyGrade)). Visiting this website can expose visitors to credential/card theft, browser cryptojacking, or drive-by exploit payloads."
+        } else if safetyScore >= 85 {
+            verdictLabel = "SAFE TO VISIT"
+            verdictDescription = "No web malware, skimmers, cryptojackers, hidden exploit iframes, or drive-by download payloads were detected (Visitor Safety Score: \(safetyScore)/100, Grade \(safetyGrade))."
+        } else if safetyScore >= 70 {
+            verdictLabel = "SAFE TO VISIT (WITH MINOR WARNINGS)"
+            verdictDescription = "No active malware payloads were detected (Visitor Safety Score: \(safetyScore)/100, Grade \(safetyGrade)), though some transport or client-side security configurations should be hardened."
+        } else {
+            verdictLabel = "CAUTION ADVISED — UNSAFE TRANSPORT / CLIENT RISKS"
+            verdictDescription = "While no explicit malware payloads were found, severe transport or client-side vulnerabilities make entering sensitive data on this website risky (Visitor Safety Score: \(safetyScore)/100, Grade \(safetyGrade))."
+        }
+
+        return VisitorSafetyEvaluation(
+            safetyScore: safetyScore,
+            safetyGrade: safetyGrade,
+            isSafeToVisit: isSafe,
+            verdictLabel: verdictLabel,
+            verdictDescription: verdictDescription,
+            detectedMalware: malwareFindings
+        )
+    }
+
     public static func compareScans(baseline: ScanRecord, current: ScanRecord) -> ScanComparisonResult {
         let baselineKeys = Set(baseline.findings.filter { $0.status != .incomplete }.map { "\($0.rootCauseKey)|\($0.affectedParameter)" })
         let currentKeys = Set(current.findings.filter { $0.status != .incomplete }.map { "\($0.rootCauseKey)|\($0.affectedParameter)" })

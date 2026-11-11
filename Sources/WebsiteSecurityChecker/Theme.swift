@@ -4,6 +4,7 @@ import SentinelKit
 public enum NavigationTab: String, CaseIterable, Identifiable {
     case dashboard = "Dashboard"
     case scanConfig = "Scan & Monitor"
+    case malwareScanner = "Malware & Safety"
     case findings = "Findings"
     case investigation = "AI Investigation"
     case history = "History & Compare"
@@ -15,6 +16,7 @@ public enum NavigationTab: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "shield.lefthalf.filled.badge.checkmark"
         case .scanConfig: return "dot.radiowaves.left.and.right"
+        case .malwareScanner: return "ladybug.fill"
         case .findings: return "exclamationmark.triangle.fill"
         case .investigation: return "brain.head.profile"
         case .history: return "clock.arrow.circlepath"

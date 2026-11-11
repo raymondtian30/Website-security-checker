@@ -20,6 +20,7 @@ public struct DashboardView: View {
 
                 if let scan = vm.activeScan {
                     scoreAndSeverityRow(scan: scan)
+                    malwareVisitorSafetyCard(scan: scan)
                     chartsRow(scan: scan)
                     recommendationsAndFactorsRow(scan: scan)
                 } else {
@@ -211,6 +212,65 @@ public struct DashboardView: View {
             }
             .frame(minWidth: 240, maxWidth: .infinity)
             .layoutPriority(0)
+        }
+    }
+
+    private func malwareVisitorSafetyCard(scan: ScanRecord) -> some View {
+        let safety = SecurityScorer.evaluateVisitorSafety(
+            findings: scan.findings,
+            overallScore: scan.scoreBreakdown.overallScore
+        )
+        let color = SentinelTheme.gradeColor(safety.safetyScore)
+
+        return SectionCard(title: "Malware Detection & Visitor Safety Verdict", icon: safety.isSafeToVisit ? "checkmark.shield.fill" : "ladybug.fill") {
+            HStack(alignment: .center, spacing: 18) {
+                HStack(spacing: 12) {
+                    Text("\(safety.safetyScore)/100")
+                        .font(.system(size: 26, weight: .heavy, design: .rounded))
+                        .foregroundStyle(color)
+                        .fixedSize()
+
+                    Text("Safety Grade \(safety.safetyGrade)")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(color.opacity(0.2))
+                        .foregroundStyle(color)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .fixedSize()
+
+                    Text(safety.verdictLabel)
+                        .font(.caption.weight(.heavy))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background((safety.isSafeToVisit ? Color.green : Color.red).opacity(0.18))
+                        .foregroundStyle(safety.isSafeToVisit ? Color.green : Color.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .fixedSize()
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    if safety.detectedMalware.isEmpty {
+                        Text("0 Malware Threats Detected — Website is clean of skimmers, cryptojackers, and exploit droppers.")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white)
+                    } else {
+                        Text("Detected \(safety.detectedMalware.count) Malware Threat(s): " + safety.detectedMalware.map(\.title).joined(separator: " • "))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Button("Open Malware Scanner") {
+                    vm.selectedTab = .malwareScanner
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize()
+            }
         }
     }
 

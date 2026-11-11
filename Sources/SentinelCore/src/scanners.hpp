@@ -22,6 +22,7 @@ public:
     static void run_sqli_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
     static void run_xss_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
     static void run_owasp_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
+    static void run_malware_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit);
 };
 
 } // namespace sentinel
