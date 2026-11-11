@@ -107,13 +107,13 @@ public struct DashboardView: View {
     private func scoreAndSeverityRow(scan: ScanRecord) -> some View {
         let sb = scan.scoreBreakdown
         return HStack(alignment: .top, spacing: 16) {
-            // Score & Grade Card
+            // Score & Grade Card — Fixed minimum width & highest layout priority so it NEVER shrinks into unreadability
             SectionCard(title: "Overall Security Score", icon: "gauge.with.dots.needle.67percent") {
-                HStack(spacing: 22) {
+                HStack(spacing: 20) {
                     ZStack {
                         Circle()
                             .stroke(Color.white.opacity(0.08), lineWidth: 12)
-                            .frame(width: 112, height: 112)
+                            .frame(width: 110, height: 110)
                         Circle()
                             .trim(from: 0, to: CGFloat(sb.overallScore) / 100.0)
                             .stroke(
@@ -121,7 +121,7 @@ public struct DashboardView: View {
                                 style: StrokeStyle(lineWidth: 12, lineCap: .round)
                             )
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 112, height: 112)
+                            .frame(width: 110, height: 110)
                         VStack(spacing: 2) {
                             Text("\(sb.overallScore)")
                                 .font(.system(size: 32, weight: .heavy, design: .rounded))
@@ -131,11 +131,14 @@ public struct DashboardView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .fixedSize()
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 10) {
                             Text("Grade \(sb.letterGrade)")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 4)
                                 .background(SentinelTheme.gradeColor(sb.overallScore).opacity(0.2))
@@ -144,6 +147,8 @@ public struct DashboardView: View {
                             Text(sb.postureMeaning)
                                 .font(.headline)
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -151,9 +156,11 @@ public struct DashboardView: View {
                                 Text("Scan Coverage:")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: true, vertical: false)
                                 Text(String(format: "%.0f%%", sb.coveragePercent))
                                     .font(.caption.bold())
                                     .foregroundStyle(sb.coveragePercent == 100 ? .green : .orange)
+                                    .fixedSize(horizontal: true, vertical: false)
                             }
                             ProgressView(value: sb.coveragePercent, total: 100.0)
                                 .tint(sb.coveragePercent == 100 ? .green : .orange)
@@ -162,14 +169,17 @@ public struct DashboardView: View {
                         Text("Verified: \(sb.verifiedCount) • Suspected: \(sb.suspectedCount) • Root Causes: \(sb.deduplicatedRootCauses)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             }
-            .frame(maxWidth: 440)
+            .frame(minWidth: 425, idealWidth: 435, maxWidth: 450)
+            .layoutPriority(2)
 
-            // Severity Breakdown Cards
+            // Severity Breakdown Cards & Metadata Box — Shrinks flexibly when window narrows
             VStack(spacing: 12) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     severityCounterCard(title: "Critical", count: sb.criticalCount, severity: .critical)
                     severityCounterCard(title: "High", count: sb.highCount, severity: .high)
                     severityCounterCard(title: "Medium", count: sb.mediumCount, severity: .medium)
@@ -177,17 +187,30 @@ public struct DashboardView: View {
                     severityCounterCard(title: "Info", count: sb.infoCount, severity: .informational)
                 }
                 SectionCard {
-                    HStack {
-                        Label("Endpoints Examined: \(scan.endpointsExamined)", systemImage: "network")
-                        Spacer()
-                        Label("Scan Status: \(scan.status)", systemImage: "checkmark.seal.fill")
-                        Spacer()
-                        Label("Duration: \(scan.durationSeconds)s", systemImage: "timer")
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            Label("Endpoints: \(scan.endpointsExamined)", systemImage: "network")
+                            Spacer(minLength: 8)
+                            Label("Status: \(scan.status)", systemImage: "checkmark.seal.fill")
+                            Spacer(minLength: 8)
+                            Label("Duration: \(scan.durationSeconds)s", systemImage: "timer")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Endpoints: \(scan.endpointsExamined) • Status: \(scan.status) • Duration: \(scan.durationSeconds)s", systemImage: "network")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
             }
+            .frame(minWidth: 240, maxWidth: .infinity)
+            .layoutPriority(0)
         }
     }
 
@@ -198,14 +221,19 @@ public struct DashboardView: View {
         } label: {
             VStack(spacing: 6) {
                 Text("\(count)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(SentinelTheme.severityColor(severity))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .frame(minWidth: 40, maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 4)
             .background(SentinelTheme.bgCard)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -284,6 +312,7 @@ public struct DashboardView: View {
                         ForEach(Array(topFindings)) { f in
                             HStack(alignment: .top, spacing: 10) {
                                 SeverityBadge(severity: f.severity)
+                                    .fixedSize()
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(f.title)
                                         .font(.subheadline.weight(.semibold))
@@ -293,18 +322,22 @@ public struct DashboardView: View {
                                         .foregroundStyle(.secondary)
                                         .lineLimit(2)
                                 }
-                                Spacer()
+                                .layoutPriority(1)
+                                Spacer(minLength: 6)
                                 Button("Investigate") {
                                     vm.investigate(f)
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
+                                .fixedSize()
                             }
                             Divider().overlay(SentinelTheme.border)
                         }
                     }
                 }
             }
+            .frame(minWidth: 425, maxWidth: .infinity)
+            .layoutPriority(2)
 
             SectionCard(title: "Scoring Factors & Methodology", icon: "function") {
                 VStack(alignment: .leading, spacing: 8) {
@@ -324,6 +357,8 @@ public struct DashboardView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .frame(minWidth: 240, maxWidth: 420)
+            .layoutPriority(0)
         }
     }
 

@@ -75,23 +75,26 @@ struct MainContentView: View {
                     .padding(12)
                 }
             }
-            .frame(minWidth: 215, idealWidth: 230)
+            .navigationSplitViewColumnWidth(min: 175, ideal: 205, max: 225)
             .background(SentinelTheme.bgPrimary)
         } detail: {
-            switch vm.selectedTab {
-            case .dashboard:
-                DashboardView(vm: vm)
-            case .scanConfig:
-                ScanConfigView(vm: vm)
-            case .findings:
-                FindingsView(vm: vm)
-            case .investigation:
-                InvestigationView(vm: vm)
-            case .history:
-                HistoryComparisonView(vm: vm)
-            case .settings:
-                SettingsAuditView(vm: vm)
+            Group {
+                switch vm.selectedTab {
+                case .dashboard:
+                    DashboardView(vm: vm)
+                case .scanConfig:
+                    ScanConfigView(vm: vm)
+                case .findings:
+                    FindingsView(vm: vm)
+                case .investigation:
+                    InvestigationView(vm: vm)
+                case .history:
+                    HistoryComparisonView(vm: vm)
+                case .settings:
+                    SettingsAuditView(vm: vm)
+                }
             }
+            .navigationSplitViewColumnWidth(min: 780, ideal: 980)
         }
     }
 }
