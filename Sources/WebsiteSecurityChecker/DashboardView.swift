@@ -11,7 +11,7 @@ public struct DashboardView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 18) {
                 headerBar
 
                 if vm.isScanning {
@@ -21,13 +21,10 @@ public struct DashboardView: View {
                 if let scan = vm.activeScan {
                     scoreAndSeverityRow(scan: scan)
                     malwareVisitorSafetyCard(scan: scan)
-                    chartsRow(scan: scan)
-                    recommendationsAndFactorsRow(scan: scan)
+                    chartsAndPrioritiesRow(scan: scan)
                 } else {
                     emptyStateCard
                 }
-
-                recentScansSection
             }
             .padding(24)
         }
@@ -35,22 +32,39 @@ public struct DashboardView: View {
     }
 
     private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Security Posture Dashboard")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text("Security Overview")
+                        .font(.system(size: 25, weight: .bold))
+                        .foregroundStyle(.white)
+                    HelpTooltip(
+                        "Security Overview Dashboard",
+                        explanation: "Shows your website's 0–100 Security Posture Score, 1–100 Visitor Safety & Malware Rating, severity breakdown, and top prioritized fixes."
+                    )
+                }
                 if let scan = vm.activeScan {
-                    Text("Target: \(scan.targetURL) • Assessed \(scan.timestamp.formatted(date: .abbreviated, time: .shortened))")
+                    Text("\(scan.targetURL) • Assessed \(scan.timestamp.formatted(date: .abbreviated, time: .shortened))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 } else {
-                    Text("Configure an authorized target domain to begin a comprehensive security audit.")
+                    Text("No active scan loaded. Use 'Step-by-Step Guide' or 'New Scan' to begin.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
+            .layoutPriority(1)
+
             Spacer()
+
+            Button {
+                vm.showStepByStepGuide = true
+            } label: {
+                Label("Step-by-Step Guide", systemImage: "book.pages.fill")
+            }
+            .buttonStyle(.bordered)
+
             if let scan = vm.activeScan {
                 Menu {
                     ForEach(ReportFormat.allCases, id: \.rawValue) { fmt in
@@ -63,10 +77,11 @@ public struct DashboardView: View {
                 }
                 .buttonStyle(.bordered)
             }
+
             Button {
                 vm.selectedTab = .scanConfig
             } label: {
-                Label("New Security Scan", systemImage: "play.fill")
+                Label("New Scan", systemImage: "play.fill")
             }
             .buttonStyle(.borderedProminent)
             .tint(SentinelTheme.accentCyan)
@@ -74,24 +89,25 @@ public struct DashboardView: View {
     }
 
     private var liveScanBanner: some View {
-        SectionCard(title: "Active Security Scan in Progress", icon: "waveform.path.ecg") {
+        SectionCard(title: "Live Security Scan Running", icon: "waveform.path.ecg") {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Current Module: \(vm.liveProgress.currentModule)")
+                    Text("Module: \(vm.liveProgress.currentModule)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                     Spacer()
-                    Text("Coverage: \(Int(vm.liveProgress.coveragePercent))% • Endpoints: \(vm.liveProgress.endpointsExamined) • Findings: \(vm.liveProgress.findingsCount)")
+                    Text("\(Int(vm.liveProgress.coveragePercent))% • \(vm.liveProgress.endpointsExamined) Endpoints • \(vm.liveProgress.findingsCount) Findings")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 ProgressView(value: vm.liveProgress.coveragePercent, total: 100.0)
                     .tint(SentinelTheme.accentCyan)
-                HStack(spacing: 12) {
-                    Button(vm.isPaused ? "Resume Scan" : "Pause Scan") {
+                HStack(spacing: 10) {
+                    Button(vm.isPaused ? "Resume" : "Pause") {
                         vm.togglePauseScan()
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
 
                     Button(role: .destructive) {
                         vm.emergencyStopScan()
@@ -100,6 +116,7 @@ public struct DashboardView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
+                    .controlSize(.small)
                 }
             }
         }
@@ -108,24 +125,28 @@ public struct DashboardView: View {
     private func scoreAndSeverityRow(scan: ScanRecord) -> some View {
         let sb = scan.scoreBreakdown
         return HStack(alignment: .top, spacing: 16) {
-            // Score & Grade Card — Fixed minimum width & highest layout priority so it NEVER shrinks into unreadability
-            SectionCard(title: "Overall Security Score", icon: "gauge.with.dots.needle.67percent") {
+            // Protected Score Card — never shrinks into unreadability
+            SectionCard(
+                title: "Overall Security Score",
+                icon: "gauge.with.dots.needle.67percent",
+                helpText: "Scored 0–100 based on deduplicated root-cause vulnerabilities weighted by severity, confidence, and verification status. Any Verified Critical flaw caps the score at 69 (Grade D)."
+            ) {
                 HStack(spacing: 20) {
                     ZStack {
                         Circle()
-                            .stroke(Color.white.opacity(0.08), lineWidth: 12)
-                            .frame(width: 110, height: 110)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 11)
+                            .frame(width: 106, height: 106)
                         Circle()
                             .trim(from: 0, to: CGFloat(sb.overallScore) / 100.0)
                             .stroke(
                                 SentinelTheme.gradeColor(sb.overallScore),
-                                style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                                style: StrokeStyle(lineWidth: 11, lineCap: .round)
                             )
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 110, height: 110)
-                        VStack(spacing: 2) {
+                            .frame(width: 106, height: 106)
+                        VStack(spacing: 1) {
                             Text("\(sb.overallScore)")
-                                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                                .font(.system(size: 30, weight: .heavy, design: .rounded))
                                 .foregroundStyle(.white)
                             Text("/ 100")
                                 .font(.caption2)
@@ -137,10 +158,10 @@ public struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 10) {
                             Text("Grade \(sb.letterGrade)")
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 11)
                                 .padding(.vertical, 4)
                                 .background(SentinelTheme.gradeColor(sb.overallScore).opacity(0.2))
                                 .foregroundStyle(SentinelTheme.gradeColor(sb.overallScore))
@@ -153,32 +174,38 @@ public struct DashboardView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Scan Coverage:")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                Text(String(format: "%.0f%%", sb.coveragePercent))
-                                    .font(.caption.bold())
+                            HStack(spacing: 6) {
+                                Text("Scan Coverage: \(String(format: "%.0f%%", sb.coveragePercent))")
+                                    .font(.caption.weight(.medium))
                                     .foregroundStyle(sb.coveragePercent == 100 ? .green : .orange)
                                     .fixedSize(horizontal: true, vertical: false)
+                                HelpTooltip(
+                                    "Scan Coverage Percentage",
+                                    explanation: "Percentage of configured security modules that finished executing. Cancelled or timed-out checks are marked Incomplete and never counted as passing."
+                                )
                             }
                             ProgressView(value: sb.coveragePercent, total: 100.0)
                                 .tint(sb.coveragePercent == 100 ? .green : .orange)
                         }
 
-                        Text("Verified: \(sb.verifiedCount) • Suspected: \(sb.suspectedCount) • Root Causes: \(sb.deduplicatedRootCauses)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                        HStack(spacing: 6) {
+                            Text("Verified: \(sb.verifiedCount) • Suspected: \(sb.suspectedCount) • Root Causes: \(sb.deduplicatedRootCauses)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                            HelpTooltip(
+                                "Root-Cause Deduplication",
+                                explanation: "If the same missing header or misconfiguration appears on 10 pages, Sentinel groups them into 1 Root Cause so your score isn't unfairly penalized 10 times."
+                            )
+                        }
                     }
                 }
             }
             .frame(minWidth: 425, idealWidth: 435, maxWidth: 450)
             .layoutPriority(2)
 
-            // Severity Breakdown Cards & Metadata Box — Shrinks flexibly when window narrows
+            // Flexible Secondary Severity Counter Boxes — shrink first on window resize
             VStack(spacing: 12) {
                 HStack(spacing: 8) {
                     severityCounterCard(title: "Critical", count: sb.criticalCount, severity: .critical)
@@ -200,13 +227,11 @@ public struct DashboardView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("Endpoints: \(scan.endpointsExamined) • Status: \(scan.status) • Duration: \(scan.durationSeconds)s", systemImage: "network")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
+                        Text("Endpoints: \(scan.endpointsExamined) • Status: \(scan.status) • \(scan.durationSeconds)s")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
             }
@@ -222,16 +247,20 @@ public struct DashboardView: View {
         )
         let color = SentinelTheme.gradeColor(safety.safetyScore)
 
-        return SectionCard(title: "Malware Detection & Visitor Safety Verdict", icon: safety.isSafeToVisit ? "checkmark.shield.fill" : "ladybug.fill") {
-            HStack(alignment: .center, spacing: 18) {
-                HStack(spacing: 12) {
+        return SectionCard(
+            title: "Website Malware & Visitor Safety Rating",
+            icon: safety.isSafeToVisit ? "checkmark.shield.fill" : "ladybug.fill",
+            helpText: "Evaluates whether this website is safe for users to visit on a 1–100 scale (Grade F–A+). Checks for Magecart card skimmers, cryptojackers, obfuscated JS droppers, hidden exploit iframes, webshells, and drive-by downloads."
+        ) {
+            HStack(alignment: .center, spacing: 16) {
+                HStack(spacing: 10) {
                     Text("\(safety.safetyScore)/100")
-                        .font(.system(size: 26, weight: .heavy, design: .rounded))
+                        .font(.system(size: 24, weight: .heavy, design: .rounded))
                         .foregroundStyle(color)
                         .fixedSize()
 
-                    Text("Safety Grade \(safety.safetyGrade)")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                    Text("Grade \(safety.safetyGrade)")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(color.opacity(0.2))
@@ -249,22 +278,16 @@ public struct DashboardView: View {
                         .fixedSize()
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    if safety.detectedMalware.isEmpty {
-                        Text("0 Malware Threats Detected — Website is clean of skimmers, cryptojackers, and exploit droppers.")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white)
-                    } else {
-                        Text("Detected \(safety.detectedMalware.count) Malware Threat(s): " + safety.detectedMalware.map(\.title).joined(separator: " • "))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.red)
-                            .lineLimit(2)
-                    }
-                }
+                Text(safety.detectedMalware.isEmpty
+                     ? "No malware, skimmers, or exploit droppers detected."
+                     : "\(safety.detectedMalware.count) Malware Threat(s): " + safety.detectedMalware.map(\.title).joined(separator: " • "))
+                    .font(.subheadline)
+                    .foregroundStyle(safety.detectedMalware.isEmpty ? Color.secondary : Color.red)
+                    .lineLimit(1)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 6)
 
-                Button("Open Malware Scanner") {
+                Button("Malware Details") {
                     vm.selectedTab = .malwareScanner
                 }
                 .buttonStyle(.bordered)
@@ -279,9 +302,9 @@ public struct DashboardView: View {
             vm.severityFilter = severity
             vm.selectedTab = .findings
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 5) {
                 Text("\(count)")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.system(size: 25, weight: .bold, design: .rounded))
                     .foregroundStyle(SentinelTheme.severityColor(severity))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -292,21 +315,72 @@ public struct DashboardView: View {
                     .minimumScaleFactor(0.65)
             }
             .frame(minWidth: 40, maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 13)
             .padding(.horizontal, 4)
             .background(SentinelTheme.bgCard)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(SentinelTheme.severityColor(severity).opacity(count > 0 ? 0.55 : 0.15), lineWidth: 1)
+                    .stroke(SentinelTheme.severityColor(severity).opacity(count > 0 ? 0.50 : 0.14), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
     }
 
-    private func chartsRow(scan: ScanRecord) -> some View {
+    private func chartsAndPrioritiesRow(scan: ScanRecord) -> some View {
         HStack(alignment: .top, spacing: 16) {
-            SectionCard(title: "Findings by Severity", icon: "chart.bar.fill") {
+            SectionCard(
+                title: "Top Priority Fixes",
+                icon: "wrench.and.screwdriver.fill",
+                helpText: "The highest-impact unresolved vulnerabilities found in this scan. Click 'Inspect' to view redacted evidence, code fixes, and AI Analyst guidance."
+            ) {
+                let topFindings = scan.findings.filter { !$0.isResolved && $0.severity != .informational && $0.status != .incomplete }.prefix(5)
+                if topFindings.isEmpty {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                        Text("All high-priority security checks passed with zero active vulnerabilities.")
+                            .font(.subheadline)
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.vertical, 8)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(topFindings)) { f in
+                            HStack(alignment: .center, spacing: 10) {
+                                SeverityBadge(severity: f.severity)
+                                    .fixedSize()
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(f.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                    Text(f.remediation)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .layoutPriority(1)
+                                Spacer(minLength: 6)
+                                Button("Inspect") {
+                                    vm.investigate(f)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .fixedSize()
+                            }
+                            Divider().overlay(SentinelTheme.border)
+                        }
+                    }
+                }
+            }
+            .frame(minWidth: 425, maxWidth: .infinity)
+            .layoutPriority(2)
+
+            SectionCard(
+                title: "Score Trend & Severity Distribution",
+                icon: "chart.bar.fill",
+                helpText: "Visualizes your vulnerability counts by severity level across the current assessment."
+            ) {
                 let sb = scan.scoreBreakdown
                 let items: [(String, Int, Color)] = [
                     ("Critical", sb.criticalCount, SentinelTheme.severityColor(.critical)),
@@ -325,155 +399,30 @@ public struct DashboardView: View {
                         .cornerRadius(5)
                     }
                 }
-                .frame(height: 170)
+                .frame(height: 185)
             }
-
-            SectionCard(title: "Historical Security Score Trend", icon: "chart.xyaxis.line") {
-                let historyReversed = Array(vm.scanHistory.prefix(12).reversed())
-                if historyReversed.isEmpty {
-                    Text("Run multiple assessments to track security score trends over time.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(height: 170)
-                } else {
-                    Chart {
-                        ForEach(Array(historyReversed.enumerated()), id: \.element.id) { idx, rec in
-                            LineMark(
-                                x: .value("Scan", "#\(idx + 1)"),
-                                y: .value("Score", rec.scoreBreakdown.overallScore)
-                            )
-                            .foregroundStyle(SentinelTheme.accentCyan)
-                            .symbol(Circle())
-
-                            PointMark(
-                                x: .value("Scan", "#\(idx + 1)"),
-                                y: .value("Score", rec.scoreBreakdown.overallScore)
-                            )
-                            .foregroundStyle(SentinelTheme.gradeColor(rec.scoreBreakdown.overallScore))
-                        }
-                    }
-                    .chartYScale(domain: 0...100)
-                    .frame(height: 170)
-                }
-            }
-        }
-    }
-
-    private func recommendationsAndFactorsRow(scan: ScanRecord) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            SectionCard(title: "Top Priority Security Remediations", icon: "wrench.and.screwdriver.fill") {
-                let topFindings = scan.findings.filter { !$0.isResolved && $0.severity != .informational && $0.status != .incomplete }.prefix(4)
-                if topFindings.isEmpty {
-                    Text("No active high-priority vulnerabilities remaining in this assessment.")
-                        .font(.subheadline)
-                        .foregroundStyle(.green)
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(topFindings)) { f in
-                            HStack(alignment: .top, spacing: 10) {
-                                SeverityBadge(severity: f.severity)
-                                    .fixedSize()
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(f.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                    Text(f.remediation)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                }
-                                .layoutPriority(1)
-                                Spacer(minLength: 6)
-                                Button("Investigate") {
-                                    vm.investigate(f)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .fixedSize()
-                            }
-                            Divider().overlay(SentinelTheme.border)
-                        }
-                    }
-                }
-            }
-            .frame(minWidth: 425, maxWidth: .infinity)
-            .layoutPriority(2)
-
-            SectionCard(title: "Scoring Factors & Methodology", icon: "function") {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(scan.scoreBreakdown.scoringFactors, id: \.self) { factor in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(SentinelTheme.accentCyan)
-                                .font(.caption)
-                            Text(factor)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                    }
-                    Divider().overlay(SentinelTheme.border)
-                    Text(scan.scoreBreakdown.algorithmExplanation)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(minWidth: 240, maxWidth: 420)
+            .frame(minWidth: 240, maxWidth: 410)
             .layoutPriority(0)
         }
     }
 
     private var emptyStateCard: some View {
-        SectionCard(title: "Welcome to Website Security Checker", icon: "shield.checkered") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Start an authorized security audit to evaluate SQL Injection indicators, Reflected & DOM XSS, Authentication & Session Cookies, CSRF protections, Server-Side Misconfigurations, Security Headers, TLS/HTTPS, API Security, Information Disclosure, and OWASP Top 10 coverage.")
+        SectionCard(title: "Welcome to Sentinel Website Security Checker", icon: "shield.checkered") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Perform authorized, non-destructive security & malware audits across 11 specialized C++ engines: Malware & Skimmers, SQL/NoSQL/SSTI/XXE/LFI Injections, Reflected & DOM XSS, Cookie Theft & Session Hijacking, Authentication & Credential Attacks, Software/Container Misconfigurations, DDoS Resilience, CMS Plugin Vulnerabilities, and DNS Spoofing Posture.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Button("Configure First Security Assessment") {
-                    vm.selectedTab = .scanConfig
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(SentinelTheme.accentCyan)
-            }
-        }
-    }
-
-    private var recentScansSection: some View {
-        SectionCard(title: "Recent Security Assessments", icon: "clock.fill") {
-            if vm.scanHistory.isEmpty {
-                Text("No scan history recorded yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(vm.scanHistory.prefix(6)) { record in
-                        HStack {
-                            Text(record.scoreBreakdown.letterGrade)
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .frame(width: 36, height: 28)
-                                .background(SentinelTheme.gradeColor(record.scoreBreakdown.overallScore).opacity(0.2))
-                                .foregroundStyle(SentinelTheme.gradeColor(record.scoreBreakdown.overallScore))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(record.targetURL)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.white)
-                                Text("\(record.timestamp.formatted(date: .abbreviated, time: .shortened)) • Score: \(record.scoreBreakdown.overallScore)/100 • Coverage: \(Int(record.scoreBreakdown.coveragePercent))% • Findings: \(record.findings.count)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("View") {
-                                vm.activeScan = record
-                                vm.selectedFinding = record.findings.first
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
-                        .padding(8)
-                        .background(vm.activeScan?.id == record.id ? SentinelTheme.bgElevated : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                HStack(spacing: 12) {
+                    Button("Open Scan Setup") {
+                        vm.selectedTab = .scanConfig
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(SentinelTheme.accentCyan)
+
+                    Button("Read Step-by-Step Guide") {
+                        vm.showStepByStepGuide = true
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
         }

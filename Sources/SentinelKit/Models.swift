@@ -87,6 +87,7 @@ public enum ScanCategory: String, Codable, CaseIterable, Identifiable, Sendable 
     case xss = "Cross-Site Scripting (XSS)"
     case owasp = "OWASP Top 10"
     case malware = "Malware & Visitor Safety"
+    case advancedSurface = "Advanced Threat Surface"
 
     public var id: String { rawValue }
 }

@@ -13,6 +13,8 @@ public enum ReportFormat: String, CaseIterable {
 @MainActor
 public final class AppViewModel: ObservableObject {
     @Published public var selectedTab: NavigationTab = .dashboard
+    @Published public var showStepByStepGuide: Bool = false
+    @Published public var inspectorTab: Int = 0 // 0: Overview & Fix, 1: Evidence, 2: AI Analyst Walkthrough
     @Published public var scanConfig = ScanConfiguration()
     @Published public var allowedSubdomainsInput: String = ""
     @Published public var excludedPathsInput: String = "/logout, /signout, /delete"
@@ -247,7 +249,8 @@ public final class AppViewModel: ObservableObject {
 
     public func investigate(_ finding: VulnerabilityFinding) {
         selectedFinding = finding
-        selectedTab = .investigation
+        inspectorTab = 2
+        selectedTab = .findings
     }
 
     public func runEnhancedAIAnalysis() {

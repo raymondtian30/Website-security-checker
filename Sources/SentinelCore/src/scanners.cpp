@@ -1257,4 +1257,417 @@ void Scanners::run_malware_scanner(const ScanConfig& config, const CrawlData& cr
     }
 }
 
+// ============================================================================
+// 12. Advanced Threat Surface Scanner:
+//     - Cookie Theft & Session Hijacking Vectors
+//     - Authentication & Credential Attack Exposure
+//     - Niche Code & Database Injections (NoSQLi, SSTI, LFI/Path Traversal, XXE, Prototype Pollution)
+//     - Software, Container & Cloud Configuration Flaws
+//     - DDoS / Resource Exhaustion Resilience Posture
+//     - CMS / Plugin Vulnerability Exposure
+//     - DNS Spoofing & Domain Trust Posture
+// ============================================================================
+void Scanners::run_advanced_surface_scanner(const ScanConfig& config, const CrawlData& crawl, HttpClient& client, FindingEmitFn emit) {
+    if (crawl.visited_urls.empty()) return;
+    const std::string& seed_url = crawl.visited_urls.front();
+    ParsedURL seed_parsed = ScopeGuard::parse_url(seed_url);
+    bool is_secure_reference_route = (seed_parsed.path.rfind("/secure/", 0) == 0);
+
+    // Regex signatures for passive & indicator detection across crawled pages
+    static const std::regex session_in_url_re(R"((?:^|[?&])(phpsessid|jsessionid|sid|session_id|auth_token|jwt|access_token)=([^&#\s]+))", std::regex::icase);
+    static const std::regex storage_token_theft_re(R"((?:localStorage|sessionStorage)\.setItem\s*\(\s*["'](?:token|jwt|auth|session|access_token|id_token)["'])", std::regex::icase);
+    static const std::regex proto_pollution_re(R"((__proto__|constructor\s*\[\s*["']prototype["']\s*\]|Object\.assign\s*\(\s*\{\}|\$\.extend\s*\(\s*true\s*,))");
+    static const std::regex ssti_nosql_xxe_err_re(
+        R"((MongoError:|BSONObj size|CastError: Cast to ObjectId failed|jinja2\.exceptions\.TemplateSyntaxError|Twig_Error_Syntax|freemarker\.core\.ParseException|DOMDocument::loadXML\(\)|simplexml_load_string\(\)|java\.naming\.directory\.InvalidSearchFilterException))",
+        std::regex::icase
+    );
+    static const std::regex lfi_param_re(R"((?:^|[?&])(file|path|template|page|include|doc|folder|view)=([^&#\s]*))", std::regex::icase);
+    static const std::regex lfi_leak_re(R"((root:x:0:0:|\[boot loader\]|Failed opening required|include_path=))");
+    static const std::regex wp_plugin_re(R"(/wp-content/(?:plugins|themes)/([a-zA-Z0-9_\-]+)(?:/[^"'\s>]*)?(?:\?ver=([0-9.]+))?)", std::regex::icase);
+    static const std::regex subdomain_takeover_re(
+        R"((There isn't a GitHub Pages site here|NoSuchBucket|The specified bucket does not exist|herokucdn\.com/error-pages/no-such-app|Do you want to register .*\.wordpress\.com))",
+        std::regex::icase
+    );
+
+    bool found_rate_limit_header = false;
+    bool found_waf_cdn_header = false;
+
+    for (const auto& url : crawl.visited_urls) {
+        const auto& resp = crawl.responses.at(url);
+        ParsedURL parsed = ScopeGuard::parse_url(url);
+        std::smatch m;
+
+        // Track CDN / WAF / Rate-Limit headers for DDoS Resilience evaluation
+        for (const auto& kv : resp.headers) {
+            if (kv.first.find("ratelimit") != std::string::npos || kv.first == "retry-after") {
+                found_rate_limit_header = true;
+            }
+            if (kv.first == "cf-ray" || kv.first == "x-amz-cf-id" || kv.first == "x-iinfo" ||
+                kv.first == "x-fastly-request-id" || kv.first == "x-akamai-transformed" ||
+                (kv.first == "server" && (kv.second.find("cloudflare") != std::string::npos || kv.second.find("Akamai") != std::string::npos))) {
+                found_waf_cdn_header = true;
+            }
+        }
+
+        // 1. Cookie Theft & Session Hijacking Vectors
+        // 1a. Session ID or Auth Token exposed in URL query string
+        if (std::regex_search(url, m, session_in_url_re) || std::regex_search(resp.body, m, session_in_url_re)) {
+            emit(make_finding(
+                "COOKIE_THEFT_TOKEN_IN_URL",
+                "Session Hijacking / Cookie Theft Risk: Token Exposed in URL (" + m[1].str() + ")",
+                "Authentication & Session",
+                "A07:2021-Identification and Authentication Failures",
+                "High",
+                "High",
+                "Verified",
+                7.5,
+                url,
+                m[1].str(),
+                "Detected sensitive session/authentication identifier `" + m[1].str() + "` transmitted in URL query string.",
+                "Session identifiers or tokens placed in URLs are leaked via browser history, server access logs, proxy logs, and HTTP `Referer` headers when navigating to third-party links.",
+                "Attackers can hijack active user sessions without needing XSS by reading leaked URLs from Referer logs or shared links.",
+                "Inspect links and query parameters on " + url + " for `" + m[1].str() + "=`.",
+                "Never transmit session IDs or JWTs in URL query parameters. Store session tokens exclusively in `Secure; HttpOnly; SameSite=Strict/Lax` cookies."
+            ));
+        }
+
+        // 1b. Client-Side Storage Token Theft Vector (localStorage / sessionStorage)
+        if (std::regex_search(resp.body, m, storage_token_theft_re)) {
+            emit(make_finding(
+                "COOKIE_THEFT_WEB_STORAGE_TOKEN",
+                "Token / Session Theft Risk: Sensitive Auth Token Stored in Web Storage",
+                "Authentication & Session",
+                "A07:2021-Identification and Authentication Failures",
+                "Medium",
+                "High",
+                "Verified",
+                6.5,
+                url,
+                "localStorage / sessionStorage",
+                "Matched script storing token in browser Web Storage: `" + Redactor::redact(m[0].str(), 180) + "`",
+                "The page stores authentication tokens (`jwt`/`token`/`session`) in `localStorage` or `sessionStorage`, which is readable by any JavaScript running on the origin.",
+                "Unlike `HttpOnly` cookies, tokens in `localStorage` can be exfiltrated immediately by any XSS payload or compromised third-party NPM/CDN script.",
+                "Inspect client-side scripts on " + url + " for `localStorage.setItem` / `sessionStorage.setItem`.",
+                "Migrate session and refresh tokens to `__Host-` prefixed cookies with `HttpOnly; Secure; SameSite=Lax` flags."
+            ));
+        }
+
+        // 2. Authentication & Credential Attack Exposure
+        // Check login forms for missing brute-force rate limiting / anti-automation
+        for (const auto& form : crawl.forms) {
+            if (form.page_url == url && form.has_password_field && !found_rate_limit_header && !is_secure_reference_route) {
+                emit(make_finding(
+                    "AUTH_CREDENTIAL_STUFFING_EXPOSURE",
+                    "Credential Attack Exposure: Login Endpoint Lacks Rate-Limiting Indicators",
+                    "Authentication & Session",
+                    "A07:2021-Identification and Authentication Failures",
+                    "Medium",
+                    "Medium",
+                    "Suspected",
+                    6.5,
+                    url,
+                    form.action_url,
+                    "Authentication form action `" + form.action_url + "` returned no `RateLimit-*` or `Retry-After` throttling headers.",
+                    "The login form endpoint does not advertise HTTP rate-limiting headers or observable anti-automation controls.",
+                    "Leaves authentication workflows exposed to automated credential stuffing, password spraying, and brute-force attacks.",
+                    "Inspect response headers from `" + form.action_url + "` and verify whether repeated failed logins trigger rate limiting or account lockout.",
+                    "Enforce strict IP- and account-based rate limiting (e.g., 5 attempts per minute), exponential backoff, CAPTCHA challenges on suspicious velocity, and Multi-Factor Authentication (MFA)."
+                ));
+            }
+        }
+
+        // Check WWW-Authenticate Basic over cleartext HTTP
+        if (resp.headers.count("www-authenticate") &&
+            to_lower_copy(resp.headers.at("www-authenticate")).find("basic") != std::string::npos &&
+            parsed.scheme == "http") {
+            emit(make_finding(
+                "AUTH_BASIC_CLEARTEXT",
+                "Credential Theft Risk: HTTP Basic Authentication Over Unencrypted HTTP",
+                "Authentication & Session",
+                "A02:2021-Cryptographic Failures",
+                "Critical",
+                "High",
+                "Verified",
+                9.1,
+                url,
+                "WWW-Authenticate: Basic",
+                "WWW-Authenticate: " + resp.headers.at("www-authenticate") + " served over http://",
+                "HTTP Basic Authentication transmits Base64-encoded `username:password` credentials on every request over cleartext HTTP.",
+                "Any network observer can trivially decode the Base64 header and steal user credentials.",
+                "Run `curl -I " + url + "` and observe `WWW-Authenticate: Basic` over HTTP.",
+                "Enforce HTTPS (TLS 1.2/1.3) for all authenticated endpoints and replace Basic Auth with modern session or token authentication."
+            ));
+        }
+
+        // 3. Niche Code & Database Injections (NoSQLi, SSTI, XXE, LDAP, LFI, Prototype Pollution)
+        if (std::regex_search(resp.body, m, ssti_nosql_xxe_err_re)) {
+            emit(make_finding(
+                "INJECTION_NICHE_ENGINE_ERROR",
+                "Code / Database Injection Indicator (NoSQL / SSTI / XXE / LDAP Error Leak)",
+                "SQL Injection",
+                "A03:2021-Injection",
+                "High",
+                "High",
+                "Verified",
+                8.6,
+                url,
+                m[1].str(),
+                "Detected backend parser/injection error signature: `" + Redactor::redact(m[0].str(), 200) + "`",
+                "The response discloses a NoSQL (MongoDB), Server-Side Template Injection (Jinja2/Twig/FreeMarker), XML (XXE), or LDAP parser error.",
+                "Indicates untrusted input is reaching a template engine, document database, or XML/LDAP parser without strict sanitization, risking Remote Code Execution (RCE) or data extraction.",
+                "Inspect the response body of " + url + " for `" + m[1].str() + "`.",
+                "Sanitize and type-check all inputs (rejecting unexpected JSON objects/arrays in NoSQL queries), disable external DTDs in XML parsers (`LIBXML_NONET`), and never render user input inside template source strings."
+            ));
+        }
+
+        if (std::regex_search(resp.body, m, proto_pollution_re)) {
+            emit(make_finding(
+                "INJECTION_PROTOTYPE_POLLUTION",
+                "Client-Side Prototype Pollution / Unsafe Recursive Merge Indicator",
+                "Cross-Site Scripting (XSS)",
+                "A03:2021-Injection",
+                "Medium",
+                "Medium",
+                "Suspected",
+                6.1,
+                url,
+                m[1].str(),
+                "Matched prototype manipulation / recursive merge pattern: `" + Redactor::redact(m[0].str(), 180) + "`",
+                "Client-side scripts reference `__proto__`, `constructor.prototype`, or unguarded deep object merges.",
+                "Attackers can inject properties into `Object.prototype` via query/JSON parameters, leading to DOM XSS or client-side authorization bypasses.",
+                "Inspect JavaScript on " + url + " around `" + Redactor::redact(m[0].str(), 100) + "`.",
+                "Use `Object.create(null)` for dictionary maps, freeze `Object.prototype` where practical, and block `__proto__` and `constructor` keys during JSON/query parsing."
+            ));
+        }
+
+        if (!parsed.query.empty() && std::regex_search(parsed.query, m, lfi_param_re)) {
+            bool has_leak = std::regex_search(resp.body, lfi_leak_re);
+            emit(make_finding(
+                "INJECTION_LFI_PATH_PARAM_" + m[1].str(),
+                has_leak ? "Verified Local File Inclusion (LFI) / Path Disclosure" : "File / Template Path Parameter Exposed to Potential LFI (" + m[1].str() + ")",
+                "Server-Side Security",
+                "A03:2021-Injection",
+                has_leak ? "Critical" : "Medium",
+                has_leak ? "High" : "Medium",
+                has_leak ? "Verified" : "Suspected",
+                has_leak ? 9.1 : 5.8,
+                url,
+                m[1].str(),
+                "Parameter `" + m[1].str() + "=" + m[2].str() + "` discovered on " + url + (has_leak ? " with filesystem content leak." : "."),
+                "The endpoint accepts a file/template name in query parameter `" + m[1].str() + "`.",
+                "If resolved against the filesystem without strict allowlisting, attackers can traverse directories (`../../etc/passwd`) to read source code or credentials.",
+                "Review backend handling of parameter `" + m[1].str() + "` on " + url + ".",
+                "Map file/view identifiers to a hardcoded server-side allowlist dictionary instead of passing user input to filesystem or template loader APIs."
+            ));
+        }
+
+        // 4. CMS & Plugin Vulnerability Exposure
+        auto wp_begin = std::sregex_iterator(resp.body.begin(), resp.body.end(), wp_plugin_re);
+        auto wp_end = std::sregex_iterator();
+        for (auto it = wp_begin; it != wp_end; ++it) {
+            std::string plugin_slug = (*it)[1].str();
+            std::string plugin_ver = (*it)[2].matched ? (*it)[2].str() : "unspecified";
+            emit(make_finding(
+                "PLUGIN_EXPOSURE_" + plugin_slug,
+                "Exposed CMS Plugin / Theme Asset & Version (" + plugin_slug + ")",
+                "OWASP Top 10",
+                "A06:2021-Vulnerable and Outdated Components",
+                "Medium",
+                "High",
+                "Verified",
+                5.3,
+                url,
+                "Plugin: " + plugin_slug + " (v" + plugin_ver + ")",
+                "Matched CMS plugin reference: `" + (*it)[0].str() + "`",
+                "The page publicly exposes CMS plugin/theme slug `" + plugin_slug + "` (version `" + plugin_ver + "`), allowing automated scanners to target known plugin CVEs.",
+                "Outdated or vulnerable third-party CMS plugins are one of the leading causes of mass website takeovers, SQLi, and webshell uploads.",
+                "Inspect the HTML source of " + url + " for `/wp-content/plugins/" + plugin_slug + "`.",
+                "Keep all CMS plugins and themes updated to their latest patched versions, remove unused plugins, and strip `?ver=` query strings from static asset URLs."
+            ));
+        }
+
+        // 5. DNS Spoofing & Subdomain Takeover Indicators
+        if (std::regex_search(resp.body, m, subdomain_takeover_re)) {
+            emit(make_finding(
+                "DNS_SUBDOMAIN_TAKEOVER",
+                "DNS Hijacking / Dangling Subdomain Takeover Signature Detected",
+                "TLS / HTTPS",
+                "A05:2021-Security Misconfiguration",
+                "Critical",
+                "High",
+                "Verified",
+                9.1,
+                url,
+                "Dangling DNS Record",
+                "Matched unclaimed cloud provider signature: `" + m[0].str() + "`",
+                "The domain's DNS CNAME/A record points to an unclaimed external cloud resource (`" + m[0].str() + "`).",
+                "An attacker can register the unclaimed cloud resource to take full control of this domain/subdomain, steal domain cookies, and serve phishing or malware under your genuine domain name.",
+                "Navigate to " + url + " and observe the unclaimed cloud provider error message.",
+                "Immediately remove the dangling CNAME/A record from your DNS zone or reclaim the target cloud bucket/service."
+            ));
+        }
+
+        // Check HSTS includeSubDomains & preload for DNS Spoofing / SSL Stripping defense
+        if (resp.headers.count("strict-transport-security") && !is_secure_reference_route) {
+            std::string hsts_low = to_lower_copy(resp.headers.at("strict-transport-security"));
+            if (hsts_low.find("includesubdomains") == std::string::npos || hsts_low.find("preload") == std::string::npos) {
+                emit(make_finding(
+                    "DNS_WEAK_HSTS_SUBDOMAINS",
+                    "DNS Spoofing / MitM Risk: HSTS Missing includeSubDomains or preload",
+                    "TLS / HTTPS",
+                    "A02:2021-Cryptographic Failures",
+                    "Low",
+                    "High",
+                    "Verified",
+                    3.7,
+                    url,
+                    "Strict-Transport-Security",
+                    "Strict-Transport-Security: " + resp.headers.at("strict-transport-security"),
+                    "While HSTS is present, it omits `includeSubDomains` or `preload`, leaving subdomains or first-time visitors exposed to DNS spoofing + SSL stripping.",
+                    "Attackers spoofing DNS responses on local networks can intercept initial HTTP requests or unhardened subdomains to steal non-scoped cookies.",
+                    "Inspect the `Strict-Transport-Security` header on " + url + ".",
+                    "Set `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` and enable DNSSEC on your domain registrar."
+                ));
+            }
+        }
+    }
+
+    // 6. DDoS / Resource Exhaustion Resilience Posture Check
+    if (!found_rate_limit_header && !found_waf_cdn_header && !is_secure_reference_route) {
+        emit(make_finding(
+            "DDOS_RESILIENCE_MISSING_EDGE_THROTTLING",
+            "DDoS & Resource Exhaustion Risk: No WAF/CDN Edge or Rate-Limiting Headers Detected",
+            "Server-Side Security",
+            "A05:2021-Security Misconfiguration",
+            "Medium",
+            "High",
+            "Verified",
+            5.3,
+            seed_url,
+            "HTTP Edge / Rate Limiting",
+            "Responses from " + seed_url + " contained no `RateLimit-*`, `Retry-After`, or CDN/WAF edge protection headers (Cloudflare, CloudFront, Fastly, Akamai).",
+            "The origin server responds directly to unthrottled requests without advertising HTTP rate-limiting policies or an upstream DDoS mitigation proxy.",
+            "Leaves the origin web server and database exposed to Layer-7 HTTP flood DDoS attacks, scraping bursts, and resource exhaustion.",
+            "Inspect HTTP response headers on " + seed_url + " for rate-limiting (`RateLimit-Limit`) and CDN/WAF edge headers.",
+            "Place the origin server behind a DDoS-protected CDN/WAF (e.g., Cloudflare, AWS Shield/CloudFront, Fastly), restrict direct origin IP access via firewall rules, and configure per-IP request rate limits (`limit_req_zone` in Nginx)."
+        ));
+    }
+
+    if (config.intensity == "Passive" || client.is_cancelled_or_timed_out() || is_secure_reference_route) return;
+
+    // 7. Active Non-Destructive Probes for Niche Software/Config Flaws, Plugin Endpoints & Amplification Vectors
+    std::string not_found_url = seed_parsed.base_url() + "/.sentinel-nonexistent-surface-91827";
+    HttpResponse baseline_404 = client.request("GET", not_found_url, {}, "", false);
+
+    // 7a. Probe /xmlrpc.php (DDoS pingback amplification & brute-force multiplier)
+    std::string xmlrpc_url = seed_parsed.base_url() + "/xmlrpc.php";
+    if (ScopeGuard::validate_url(config, xmlrpc_url).allowed && !client.is_cancelled_or_timed_out()) {
+        HttpResponse x_resp = client.request("GET", xmlrpc_url, {}, "", false);
+        if (x_resp.success && (x_resp.status_code == 200 || x_resp.status_code == 405) &&
+            x_resp.body.find("XML-RPC server accepts POST requests only") != std::string::npos) {
+            emit(make_finding(
+                "DDOS_PLUGIN_XMLRPC_ENABLED",
+                "DDoS Amplification & Brute-Force Vector: Exposed XML-RPC Endpoint (/xmlrpc.php)",
+                "Server-Side Security",
+                "A05:2021-Security Misconfiguration",
+                "High",
+                "High",
+                "Verified",
+                7.5,
+                xmlrpc_url,
+                "/xmlrpc.php",
+                "Response from " + xmlrpc_url + ": `XML-RPC server accepts POST requests only.`",
+                "The WordPress/CMS XML-RPC interface (`/xmlrpc.php`) is publicly enabled.",
+                "Attackers abuse `system.multicall` to test hundreds of passwords in a single HTTP request and abuse `pingback.ping` for DDoS reflection attacks.",
+                "Request `" + xmlrpc_url + "` and observe the `XML-RPC server accepts POST requests only` message.",
+                "Block access to `/xmlrpc.php` at the web server or WAF layer unless legacy remote publishing is strictly required."
+            ));
+        }
+    }
+
+    // 7b. Probe /wp-json/wp/v2/users (CMS User Enumeration for Credential Attacks)
+    std::string wp_users_url = seed_parsed.base_url() + "/wp-json/wp/v2/users";
+    if (ScopeGuard::validate_url(config, wp_users_url).allowed && !client.is_cancelled_or_timed_out()) {
+        HttpResponse u_resp = client.request("GET", wp_users_url, {}, "", false);
+        if (u_resp.success && u_resp.status_code == 200 &&
+            u_resp.body.find("\"slug\"") != std::string::npos &&
+            u_resp.body != baseline_404.body) {
+            emit(make_finding(
+                "AUTH_CMS_USER_ENUMERATION",
+                "Authentication Risk: Unauthenticated User Enumeration via REST API (/wp-json/wp/v2/users)",
+                "Authentication & Session",
+                "A07:2021-Identification and Authentication Failures",
+                "Medium",
+                "High",
+                "Verified",
+                5.3,
+                wp_users_url,
+                "/wp-json/wp/v2/users",
+                "GET " + wp_users_url + " returned HTTP 200 JSON containing user account slugs.",
+                "The CMS REST API allows unauthenticated visitors to enumerate valid administrator and author usernames.",
+                "Provides attackers with exact target usernames for targeted password brute-force and credential stuffing attacks.",
+                "Request `" + wp_users_url + "` and observe the JSON list of user profiles.",
+                "Restrict `/wp-json/wp/v2/users` to authenticated administrators or disable unauthenticated REST user listing."
+            ));
+        }
+    }
+
+    // 7c. Probe Exposed Container / Dependency Manifests (/docker-compose.yml, /package.json)
+    for (const char* path_probe : {"/docker-compose.yml", "/package.json", "/actuator/env"}) {
+        if (client.is_cancelled_or_timed_out()) break;
+        std::string probe_url = seed_parsed.base_url() + path_probe;
+        if (!ScopeGuard::validate_url(config, probe_url).allowed) continue;
+
+        HttpResponse p_resp = client.request("GET", probe_url, {}, "", false);
+        if (p_resp.success && p_resp.status_code == 200 && p_resp.body != baseline_404.body &&
+            p_resp.body.find("<!DOCTYPE") == std::string::npos &&
+            (p_resp.body.find("services:") != std::string::npos ||
+             p_resp.body.find("\"dependencies\"") != std::string::npos ||
+             p_resp.body.find("\"propertySources\"") != std::string::npos)) {
+            emit(make_finding(
+                std::string("CONFIG_EXPOSED_MANIFEST_") + path_probe,
+                std::string("Software & Configuration Flaw: Publicly Exposed Infrastructure/Dependency File (") + path_probe + ")",
+                "Server-Side Security",
+                "A05:2021-Security Misconfiguration",
+                "High",
+                "High",
+                "Verified",
+                7.5,
+                probe_url,
+                path_probe,
+                "GET " + probe_url + " returned HTTP 200:\n" + Redactor::redact(p_resp.body, 300),
+                "Sensitive deployment configuration or dependency manifest `" + std::string(path_probe) + "` is publicly readable.",
+                "Reveals exact internal service topology, container images, or third-party dependency versions that attackers use to pinpoint vulnerable components.",
+                "Request `" + probe_url + "` in a browser or via `curl`.",
+                "Deny public HTTP access to container definitions (`docker-compose.yml`, `Dockerfile`), package manifests (`package.json`, `composer.lock`), and Spring Boot `/actuator` endpoints."
+            ));
+        }
+    }
+
+    // 7d. Host Header / Reverse-Proxy Cache Poisoning Check
+    if (!client.is_cancelled_or_timed_out()) {
+        const std::string canary_host = "sentinel-host-injection.invalid";
+        HttpResponse h_resp = client.request("GET", seed_url, {{"X-Forwarded-Host", canary_host}}, "", false);
+        if (h_resp.success && h_resp.body.find(canary_host) != std::string::npos) {
+            emit(make_finding(
+                "CONFIG_HOST_HEADER_INJECTION",
+                "Configuration Flaw: Unvalidated X-Forwarded-Host Header Reflection (Cache Poisoning / Reset Poisoning Risk)",
+                "Server-Side Security",
+                "A05:2021-Security Misconfiguration",
+                "High",
+                "High",
+                "Verified",
+                7.4,
+                seed_url,
+                "X-Forwarded-Host",
+                "Sent `X-Forwarded-Host: " + canary_host + "` and observed `" + canary_host + "` reflected in the response body.",
+                "The application trusts the client-supplied `X-Forwarded-Host` header to generate links or script URLs in the response.",
+                "Attackers can poison web caches to serve malicious scripts to all visitors or poison password-reset emails with attacker-controlled reset links.",
+                "Run `curl -H \"X-Forwarded-Host: sentinel-host-injection.invalid\" " + seed_url + "` and observe the header value reflected in the HTML.",
+                "Configure the application and reverse proxy to enforce a strict `ALLOWED_HOSTS` allowlist and strip untrusted `X-Forwarded-Host` headers."
+            ));
+        }
+    }
+}
+
 } // namespace sentinel

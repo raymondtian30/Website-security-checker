@@ -169,7 +169,15 @@ struct SentinelTestMain {
                 "MALWARE_CRYPTOJACKER",
                 "MALWARE_OBFUSCATED_DROPPER",
                 "MALWARE_WEB_SKIMMER",
-                "MALWARE_HIDDEN_IFRAME"
+                "MALWARE_HIDDEN_IFRAME",
+                "COOKIE_THEFT_TOKEN_IN_URL",
+                "COOKIE_THEFT_WEB_STORAGE_TOKEN",
+                "INJECTION_NICHE_ENGINE_ERROR",
+                "INJECTION_PROTOTYPE_POLLUTION",
+                "INJECTION_LFI_PATH_PARAM_file",
+                "PLUGIN_EXPOSURE_vulnerable-slider",
+                "DDOS_RESILIENCE_MISSING_EDGE_THROTTLING",
+                "DDOS_PLUGIN_XMLRPC_ENABLED"
             ]
 
             for expected in expectedCauses {

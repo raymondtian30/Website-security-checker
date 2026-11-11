@@ -3,10 +3,6 @@ import SentinelKit
 
 public struct FindingsView: View {
     @ObservedObject var vm: AppViewModel
-    @State private var showEvidence = true
-    @State private var showExplanation = true
-    @State private var showReproduction = true
-    @State private var showRemediation = true
 
     public init(vm: AppViewModel) {
         self.vm = vm
@@ -15,70 +11,72 @@ public struct FindingsView: View {
     public var body: some View {
         VStack(spacing: 0) {
             filterToolbar
-                .padding(16)
+                .padding(14)
                 .background(SentinelTheme.bgCard)
 
             Divider().overlay(SentinelTheme.border)
 
             HSplitView {
                 findingsListPane
-                    .frame(minWidth: 340, idealWidth: 400, maxWidth: 480)
+                    .frame(minWidth: 320, idealWidth: 370, maxWidth: 440)
 
-                findingDetailPane
-                    .frame(minWidth: 460, maxWidth: .infinity)
+                findingDetailInspector
+                    .frame(minWidth: 480, maxWidth: .infinity)
             }
         }
         .background(SentinelTheme.bgPrimary)
     }
 
     private var filterToolbar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search title, URL, parameter, or OWASP category...", text: $vm.searchQuery)
-                        .textFieldStyle(.plain)
-                }
-                .padding(7)
-                .background(SentinelTheme.bgElevated)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .frame(maxWidth: 320)
-
-                Picker("Severity", selection: $vm.severityFilter) {
-                    Text("All Severities").tag(SeverityLevel?.none)
-                    ForEach(SeverityLevel.allCases, id: \.self) { sev in
-                        Text(sev.rawValue).tag(SeverityLevel?.some(sev))
-                    }
-                }
-                .frame(width: 160)
-
-                Picker("Category", selection: $vm.categoryFilter) {
-                    Text("All Categories").tag("All")
-                    ForEach(ScanCategory.allCases) { cat in
-                        Text(cat.rawValue).tag(cat.rawValue)
-                    }
-                }
-                .frame(width: 210)
-
-                Picker("Status", selection: $vm.statusFilter) {
-                    Text("All Statuses").tag(FindingStatus?.none)
-                    ForEach(FindingStatus.allCases, id: \.self) { st in
-                        Text(st.displayLabel).tag(FindingStatus?.some(st))
-                    }
-                }
-                .frame(width: 175)
-
-                Toggle("Sort by Confidence", isOn: $vm.sortByConfidence)
-                    .toggleStyle(.checkbox)
-                    .font(.caption)
-
-                Toggle("Hide Resolved", isOn: $vm.hideResolved)
-                    .toggleStyle(.checkbox)
-                    .font(.caption)
-
-                Spacer()
+        HStack(spacing: 12) {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search findings, URLs, parameters, or OWASP...", text: $vm.searchQuery)
+                    .textFieldStyle(.plain)
             }
+            .padding(7)
+            .background(SentinelTheme.bgElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: 280)
+
+            Picker("Severity", selection: $vm.severityFilter) {
+                Text("All Severities").tag(SeverityLevel?.none)
+                ForEach(SeverityLevel.allCases, id: \.self) { sev in
+                    Text(sev.rawValue).tag(SeverityLevel?.some(sev))
+                }
+            }
+            .labelsHidden()
+            .frame(width: 135)
+
+            Picker("Category", selection: $vm.categoryFilter) {
+                Text("All Categories").tag("All")
+                ForEach(ScanCategory.allCases) { cat in
+                    Text(cat.rawValue).tag(cat.rawValue)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 185)
+
+            Picker("Status", selection: $vm.statusFilter) {
+                Text("All Statuses").tag(FindingStatus?.none)
+                ForEach(FindingStatus.allCases, id: \.self) { st in
+                    Text(st.displayLabel).tag(FindingStatus?.some(st))
+                }
+            }
+            .labelsHidden()
+            .frame(width: 150)
+
+            Toggle("Hide Resolved", isOn: $vm.hideResolved)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+
+            HelpTooltip(
+                "Filtering & Sorting Findings",
+                explanation: "Filter findings by Severity, Scanner Category, or Verification Status (Verified vs Suspected). Mark items as Resolved as you fix them to see your updated score."
+            )
+
+            Spacer()
         }
     }
 
@@ -86,12 +84,12 @@ public struct FindingsView: View {
         let items = vm.filteredFindings
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Discovered Findings (\(items.count))")
+                Text("Findings (\(items.count))")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 if vm.severityFilter != nil || vm.categoryFilter != "All" || vm.statusFilter != nil || !vm.searchQuery.isEmpty {
-                    Button("Reset Filters") {
+                    Button("Clear Filters") {
                         vm.severityFilter = nil
                         vm.categoryFilter = "All"
                         vm.statusFilter = nil
@@ -102,16 +100,16 @@ public struct FindingsView: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 9)
 
             Divider().overlay(SentinelTheme.border)
 
             if items.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "checkmark.shield")
-                        .font(.system(size: 34))
+                        .font(.system(size: 32))
                         .foregroundStyle(.secondary)
-                    Text("No findings match the current filter criteria.")
+                    Text("No findings match the current filter.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -138,7 +136,7 @@ public struct FindingsView: View {
         return Button {
             vm.selectedFinding = finding
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     SeverityBadge(severity: finding.severity)
                     StatusBadge(status: finding.status)
@@ -162,7 +160,7 @@ public struct FindingsView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .padding(12)
+            .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(bg)
             .overlay(
@@ -174,85 +172,109 @@ public struct FindingsView: View {
         .buttonStyle(.plain)
     }
 
-    private var findingDetailPane: some View {
+    private var findingDetailInspector: some View {
         ScrollView {
             if let f = vm.selectedFinding {
-                VStack(alignment: .leading, spacing: 18) {
-                    // Header Card
+                let analysis = f.aiAnalysis ?? AISecurityAnalyst.generateDeterministicAnalysis(
+                    for: f,
+                    allFindings: vm.activeScan?.findings ?? [f]
+                )
+
+                VStack(alignment: .leading, spacing: 16) {
+                    // Unified Header Card
                     SectionCard {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(spacing: 10) {
                                 SeverityBadge(severity: f.severity)
                                 StatusBadge(status: f.status)
-                                Text("Confidence: \(f.confidence.rawValue)")
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(SentinelTheme.bgElevated)
-                                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                                Text(String(format: "CVSS: %.1f", f.cvssScore))
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(SentinelTheme.bgElevated)
-                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                                HStack(spacing: 4) {
+                                    Text("Confidence: \(f.confidence.rawValue) • CVSS: \(String(format: "%.1f", f.cvssScore))")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    HelpTooltip(
+                                        "Verification, Confidence & CVSS",
+                                        explanation: "• Verified: Deterministic proof captured in HTTP response.\n• Suspected: Behavioral anomaly requiring review.\n• CVSS (0–10): Industry-standard severity score."
+                                    )
+                                }
                                 Spacer()
                                 Button {
                                     vm.toggleResolved(for: f)
                                 } label: {
-                                    Label(f.isResolved ? "Mark as Unresolved" : "Mark as Resolved",
+                                    Label(f.isResolved ? "Mark Unresolved" : "Mark Resolved",
                                           systemImage: f.isResolved ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(f.isResolved ? .orange : .green)
-
-                                Button {
-                                    vm.investigate(f)
-                                } label: {
-                                    Label("Investigate with AI Analyst", systemImage: "brain.head.profile")
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(SentinelTheme.accentCyan)
+                                .controlSize(.small)
                             }
 
                             Text(f.title)
-                                .font(.title2.bold())
+                                .font(.title3.bold())
                                 .foregroundStyle(.white)
 
-                            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-                                GridRow {
-                                    Text("Affected URL:")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                    Text(f.affectedURL)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(SentinelTheme.accentCyan)
-                                        .textSelection(.enabled)
-                                }
-                                GridRow {
-                                    Text("Affected Component:")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                    Text(f.affectedParameter)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.white)
-                                        .textSelection(.enabled)
-                                }
-                                GridRow {
-                                    Text("Category & OWASP:")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                    Text("\(f.category) • \(f.owaspCategory)")
-                                        .font(.caption)
-                                        .foregroundStyle(.white)
-                                }
+                            HStack(spacing: 16) {
+                                Label(f.affectedURL, systemImage: "link")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(SentinelTheme.accentCyan)
+                                    .lineLimit(1)
+                                    .textSelection(.enabled)
+                                Label(f.affectedParameter, systemImage: "tag.fill")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .lineLimit(1)
+                                    .textSelection(.enabled)
+                                Label(f.owaspCategory, systemImage: "shield.lefthalf.filled")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
+
+                            Picker("Inspector View", selection: $vm.inspectorTab) {
+                                Text("1. Overview & Fix").tag(0)
+                                Text("2. Technical Evidence & Reproduction").tag(1)
+                                Text("3. AI Security Analyst Walkthrough").tag(2)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
                         }
                     }
 
-                    // Expandable Section 1: Supporting Technical Evidence
-                    SectionCard {
-                        DisclosureGroup("Supporting Technical Evidence (Sensitive Data Redacted)", isExpanded: $showEvidence) {
+                    if vm.inspectorTab == 0 {
+                        SectionCard(title: "Why Sentinel Flagged This & Security Impact", icon: "exclamationmark.shield.fill") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(f.technicalExplanation)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.92))
+                                Divider().overlay(SentinelTheme.border)
+                                Text("Security Impact: \(f.impact)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.orange.opacity(0.95))
+                            }
+                        }
+
+                        SectionCard(title: "Recommended Fix & Secure Code Pattern", icon: "wrench.and.screwdriver.fill") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(f.remediation)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.green.opacity(0.95))
+                                    .textSelection(.enabled)
+
+                                Text(analysis.secureCodePattern)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundStyle(Color.green.opacity(0.9))
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.black.opacity(0.45))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    } else if vm.inspectorTab == 1 {
+                        SectionCard(
+                            title: "Supporting Technical Evidence (Redacted)",
+                            icon: "terminal.fill",
+                            helpText: "Actual HTTP headers or response snippets captured by the C++ engine. Passwords, API keys, and session tokens are automatically replaced with [REDACTED]."
+                        ) {
                             Text(f.evidence)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(Color(red: 0.65, green: 0.85, blue: 1.0))
@@ -260,77 +282,86 @@ public struct FindingsView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.black.opacity(0.45))
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .padding(.top, 8)
                                 .textSelection(.enabled)
                         }
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    }
 
-                    // Expandable Section 2: Technical Explanation & Security Impact
-                    SectionCard {
-                        DisclosureGroup("Technical Explanation & Security Impact", isExpanded: $showExplanation) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Why Sentinel Flagged This:")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.secondary)
-                                Text(f.technicalExplanation)
+                        SectionCard(title: "Safe Validation & Reproduction Steps", icon: "checkmark.gobackward") {
+                            Text(f.safeReproduction)
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.92))
+                                .textSelection(.enabled)
+                        }
+                    } else {
+                        SectionCard(
+                            title: "AI Security Analyst Walkthrough",
+                            icon: "brain.head.profile",
+                            helpText: "Works offline using Sentinel's deterministic correlation engine, or queries your configured OpenAI/Anthropic/Gemini model stored in macOS Keychain."
+                        ) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("Priority: \(analysis.remediationPriority)")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(SentinelTheme.accentCyan)
+                                    Spacer()
+                                    Button {
+                                        vm.runEnhancedAIAnalysis()
+                                    } label: {
+                                        Label(
+                                            vm.hasSavedAPIKey ? "Run Cloud LLM Analysis (\(vm.selectedAIProvider.rawValue))" : "Refresh Local Analyst",
+                                            systemImage: "sparkles"
+                                        )
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(SentinelTheme.accentCyan)
+                                    .controlSize(.small)
+                                    .disabled(vm.isRequestingAI)
+                                }
+
+                                Text(analysis.plainLanguageSummary)
                                     .font(.subheadline)
                                     .foregroundStyle(.white.opacity(0.92))
 
                                 Divider().overlay(SentinelTheme.border)
 
-                                Text("Potential Security Impact:")
+                                Text("Correlated Risks in This Scan:")
                                     .font(.caption.weight(.bold))
                                     .foregroundStyle(.secondary)
-                                Text(f.impact)
+                                Text(analysis.relatedFindingsAnalysis)
                                     .font(.subheadline)
-                                    .foregroundStyle(.white.opacity(0.92))
+                                    .foregroundStyle(.white.opacity(0.9))
+
+                                Divider().overlay(SentinelTheme.border)
+
+                                Text("False-Positive Assessment:")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                Text(analysis.falsePositiveAssessment)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.9))
+
+                                Divider().overlay(SentinelTheme.border)
+
+                                Text("Controlled Verification Guide:")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                Text(analysis.controlledValidationProcedure)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.9))
                             }
-                            .padding(.top, 8)
                         }
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    }
-
-                    // Expandable Section 3: Safe Reproduction Instructions
-                    SectionCard {
-                        DisclosureGroup("Safe Reproduction & Validation Instructions", isExpanded: $showReproduction) {
-                            Text(f.safeReproduction)
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.92))
-                                .padding(.top, 8)
-                                .textSelection(.enabled)
-                        }
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    }
-
-                    // Expandable Section 4: Recommended Remediation
-                    SectionCard {
-                        DisclosureGroup("Recommended Remediation & Fix", isExpanded: $showRemediation) {
-                            Text(f.remediation)
-                                .font(.subheadline)
-                                .foregroundStyle(.green.opacity(0.92))
-                                .padding(.top, 8)
-                                .textSelection(.enabled)
-                        }
-                        .font(.headline)
-                        .foregroundStyle(.white)
                     }
                 }
                 .padding(20)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 40))
+                        .font(.system(size: 38))
                         .foregroundStyle(.secondary)
-                    Text("Select a finding from the list to inspect its technical evidence, impact, and remediation.")
+                    Text("Select a finding on the left to inspect its overview, redacted evidence, and AI Analyst walkthrough.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(40)
             }
         }
     }

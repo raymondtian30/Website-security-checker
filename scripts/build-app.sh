@@ -1,18 +1,19 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-APP_NAME="WebsiteSecurityChecker"
-BUNDLE_ID="com.sentinel.WebsiteSecurityChecker"
+APP_EXEC="WebsiteSecurityChecker"
+APP_NAME="Sentinal"
+BUNDLE_ID="com.sentinal.securityauditor"
 ROOT_DIR="$(pwd)"
 APP_BUNDLE="${ROOT_DIR}/${APP_NAME}.app"
 
 echo "==> Building ${APP_NAME} (Release configuration)..."
-swift build -c release --product "${APP_NAME}"
+swift build -c release --product "${APP_EXEC}"
 
-BIN_PATH="$(swift build -c release --show-bin-path)/${APP_NAME}"
+BIN_PATH="$(swift build -c release --show-bin-path)/${APP_EXEC}"
 
 echo "==> Creating macOS Application Bundle at ${APP_BUNDLE}..."
-rm -rf "${APP_BUNDLE}"
+rm -rf "${APP_BUNDLE}" "${ROOT_DIR}/WebsiteSecurityChecker.app"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
@@ -135,15 +136,15 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<EOF
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Website Security Checker</string>
+    <string>Sentinal</string>
     <key>CFBundleDisplayName</key>
-    <string>Website Security Checker</string>
+    <string>Sentinal</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.2.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>120</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>

@@ -10,10 +10,30 @@ public struct HistoryComparisonView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Scan History & Remediation Comparison")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            Text("Scan History & Compare")
+                                .font(.system(size: 25, weight: .bold))
+                                .foregroundStyle(.white)
+                            HelpTooltip(
+                                "Scan History & Comparison",
+                                explanation: "Every assessment is saved automatically in your local SQLite database. Select any two scans below to compare score improvements, fixed vulnerabilities, and newly introduced issues."
+                            )
+                        }
+                        Text("Track security improvements over time and export PDF, HTML, or JSON reports.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        vm.showStepByStepGuide = true
+                    } label: {
+                        Label("Step-by-Step Guide", systemImage: "book.pages.fill")
+                    }
+                    .buttonStyle(.bordered)
+                }
 
                 comparisonSection
 
@@ -25,9 +45,13 @@ public struct HistoryComparisonView: View {
     }
 
     private var comparisonSection: some View {
-        SectionCard(title: "Compare Two Assessments (Remediation Tracking)", icon: "arrow.left.and.right.righttriangle.left.righttriangle.right.fill") {
+        SectionCard(
+            title: "Side-by-Side Scan Comparison",
+            icon: "arrow.left.and.right.righttriangle.left.righttriangle.right.fill",
+            helpText: "Pick an earlier Baseline Scan and a newer Current Scan to see how many points your score improved and which vulnerabilities were resolved."
+        ) {
             if vm.scanHistory.count < 2 {
-                Text("Run at least two security assessments to compare score changes, newly discovered vulnerabilities, and resolved vulnerabilities.")
+                Text("Run at least two scans to unlock side-by-side comparison and remediation tracking.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
@@ -68,59 +92,31 @@ public struct HistoryComparisonView: View {
 
                         Divider().overlay(SentinelTheme.border)
 
-                        HStack(spacing: 16) {
+                        HStack(spacing: 14) {
                             diffStatBox(
-                                title: "Score Delta",
+                                title: "Score Change",
                                 value: diff.scoreDelta >= 0 ? "+\(diff.scoreDelta) pts" : "\(diff.scoreDelta) pts",
                                 subtitle: "\(baseScan.scoreBreakdown.overallScore) (\(baseScan.scoreBreakdown.letterGrade)) → \(currScan.scoreBreakdown.overallScore) (\(currScan.scoreBreakdown.letterGrade))",
                                 color: diff.scoreDelta >= 0 ? .green : .red
                             )
                             diffStatBox(
-                                title: "Resolved Vulnerabilities",
+                                title: "Resolved",
                                 value: "\(diff.resolvedFindings.count)",
                                 subtitle: "Fixed since baseline",
                                 color: .green
                             )
                             diffStatBox(
-                                title: "Newly Discovered",
+                                title: "Newly Introduced",
                                 value: "\(diff.newFindings.count)",
-                                subtitle: "Introduced since baseline",
+                                subtitle: "New since baseline",
                                 color: diff.newFindings.isEmpty ? .secondary : .orange
                             )
                             diffStatBox(
                                 title: "Remaining Open",
                                 value: "\(diff.persistingFindings.count)",
-                                subtitle: "Present in both scans",
+                                subtitle: "Still present",
                                 color: .yellow
                             )
-                        }
-
-                        if !diff.resolvedFindings.isEmpty {
-                            Text("Resolved Since Baseline (\(diff.resolvedFindings.count))")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.green)
-                            ForEach(diff.resolvedFindings.prefix(5)) { f in
-                                HStack {
-                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                                    Text(f.title).font(.caption.weight(.medium)).foregroundStyle(.white)
-                                    Spacer()
-                                    Text(f.affectedURL).font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-
-                        if !diff.newFindings.isEmpty {
-                            Text("Newly Discovered in Current Scan (\(diff.newFindings.count))")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.orange)
-                            ForEach(diff.newFindings.prefix(5)) { f in
-                                HStack {
-                                    SeverityBadge(severity: f.severity)
-                                    Text(f.title).font(.caption.weight(.medium)).foregroundStyle(.white)
-                                    Spacer()
-                                    Text(f.affectedURL).font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
                         }
                     }
                 }
@@ -134,7 +130,7 @@ public struct HistoryComparisonView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.title2.bold())
+                .font(.title3.bold())
                 .foregroundStyle(color)
             Text(subtitle)
                 .font(.caption2)
@@ -147,34 +143,42 @@ public struct HistoryComparisonView: View {
     }
 
     private var historyTableSection: some View {
-        SectionCard(title: "All Saved Security Assessments (\(vm.scanHistory.count))", icon: "archivebox.fill") {
+        SectionCard(
+            title: "Saved Assessments (\(vm.scanHistory.count))",
+            icon: "archivebox.fill",
+            helpText: "Click 'Load' on any saved scan to view its dashboard, malware rating, and findings, or click 'Export' to generate a PDF, HTML, or JSON report."
+        ) {
             if vm.scanHistory.isEmpty {
-                Text("No saved assessments yet. Run a scan to populate persistent scan history.")
+                Text("No saved assessments yet.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: 8) {
                     ForEach(vm.scanHistory) { record in
+                        let safety = SecurityScorer.evaluateVisitorSafety(
+                            findings: record.findings,
+                            overallScore: record.scoreBreakdown.overallScore
+                        )
                         HStack(spacing: 14) {
                             Text(record.scoreBreakdown.letterGrade)
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .frame(width: 44, height: 36)
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .frame(width: 42, height: 34)
                                 .background(SentinelTheme.gradeColor(record.scoreBreakdown.overallScore).opacity(0.2))
                                 .foregroundStyle(SentinelTheme.gradeColor(record.scoreBreakdown.overallScore))
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(record.targetURL)
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.white)
-                                Text("\(record.timestamp.formatted(date: .abbreviated, time: .standard)) • Score: \(record.scoreBreakdown.overallScore)/100 • Coverage: \(Int(record.scoreBreakdown.coveragePercent))% • Findings: \(record.findings.count) (Critical: \(record.scoreBreakdown.criticalCount), High: \(record.scoreBreakdown.highCount))")
+                                Text("\(record.timestamp.formatted(date: .abbreviated, time: .shortened)) • Security: \(record.scoreBreakdown.overallScore)/100 • Visitor Safety: \(safety.safetyScore)/100 (\(safety.safetyGrade)) • Findings: \(record.findings.count)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
 
                             Spacer()
 
-                            Button("Load Assessment") {
+                            Button("Load") {
                                 vm.activeScan = record
                                 vm.selectedFinding = record.findings.first
                                 vm.selectedTab = .dashboard
@@ -202,9 +206,9 @@ public struct HistoryComparisonView: View {
                             .buttonStyle(.borderless)
                             .foregroundStyle(.red)
                         }
-                        .padding(12)
+                        .padding(10)
                         .background(SentinelTheme.bgElevated)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
                     }
                 }
             }
