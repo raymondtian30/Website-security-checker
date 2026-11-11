@@ -48,16 +48,17 @@ cd Website-security-checker
 swift run WebsiteSecurityChecker
 ```
 
-### Option B: Build & Install the Native macOS `.app` Bundle
+### Option B: Build & Install the Native macOS `Sentinal.app` Bundle
+`Sentinal.app` is included ready-to-run in the root of this repository and on the GitHub Releases page. To rebuild it from source:
 ```bash
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
 
 # Launch the packaged macOS app:
-open dist/WebsiteSecurityChecker.app
+open Sentinal.app
 
 # Or copy to /Applications:
-cp -R dist/WebsiteSecurityChecker.app /Applications/
+cp -R Sentinal.app /Applications/
 ```
 
 ---

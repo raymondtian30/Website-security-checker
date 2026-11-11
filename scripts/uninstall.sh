@@ -4,15 +4,12 @@ set -euo pipefail
 echo "==> Uninstalling Website Security Checker..."
 
 # 1. Remove application bundles if present
-if [ -d "/Applications/WebsiteSecurityChecker.app" ]; then
-    rm -rf "/Applications/WebsiteSecurityChecker.app"
-    echo "Removed /Applications/WebsiteSecurityChecker.app"
-fi
-
-if [ -d "$(pwd)/dist/WebsiteSecurityChecker.app" ]; then
-    rm -rf "$(pwd)/dist/WebsiteSecurityChecker.app"
-    echo "Removed $(pwd)/dist/WebsiteSecurityChecker.app"
-fi
+for app_path in "/Applications/Sentinal.app" "/Applications/WebsiteSecurityChecker.app" "$(pwd)/Sentinal.app" "$(pwd)/dist/WebsiteSecurityChecker.app"; do
+    if [ -d "${app_path}" ]; then
+        rm -rf "${app_path}"
+        echo "Removed ${app_path}"
+    fi
+done
 
 # 2. Remove Application Support database & logs
 APP_SUPPORT_DIR="${HOME}/Library/Application Support/WebsiteSecurityChecker"

@@ -15,7 +15,7 @@ public struct SettingsAuditView: View {
     @ObservedObject var vm: AppViewModel
     @State private var selectedSection: Int = 0 // 0: General & Updates, 1: About Sentinal, 2: Credits, 3: Audit Logs
     @State private var isCheckingUpdates: Bool = false
-    @State private var updateStatusText: String = "You are running Sentinal v1.2.0 (Latest Release)."
+    @State private var updateStatusText: String = "You are running Sentinal v1.3.0 (Latest Release)."
     @State private var latestReleaseURL: String? = nil
     @State private var contributors: [GitHubContributor] = [
         GitHubContributor(
@@ -29,7 +29,7 @@ public struct SettingsAuditView: View {
     ]
     @State private var isRefreshingContributors: Bool = false
 
-    public static let currentVersion = "1.2.0"
+    public static let currentVersion = "1.3.0"
     public static let currentBuild = "2026.11.10"
 
     public init(vm: AppViewModel) {
