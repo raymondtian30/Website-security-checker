@@ -51,10 +51,27 @@ public final class AppViewModel: ObservableObject {
 
     public let db = DatabaseManager()
     private let scannerBridge = ScannerBridge()
+    private let demoServer = DemoTargetServer()
 
     public init() {
         reloadPersistence()
         refreshKeychainStatus()
+    }
+
+    public func configureLocalPracticeTarget(vulnerable: Bool) {
+        do {
+            let port = try demoServer.start()
+            let route = vulnerable ? "/vuln/index.html" : "/secure/index.html"
+            scanConfig.targetURL = "http://127.0.0.1:\(port)\(route)"
+            scanConfig.targetDomain = "127.0.0.1"
+            scanConfig.allowLocalTestbench = true
+            scanConfig.authorized = true
+            scanConfig.intensity = ScanIntensity.thorough.rawValue
+            errorMessage = nil
+            statusBannerMessage = "Started built-in local practice server on 127.0.0.1:\(port) (\(vulnerable ? "Deliberately Vulnerable Target" : "Hardened Reference Target")). Click 'Start Authorized Security Scan' below!"
+        } catch {
+            errorMessage = "Failed to start local practice server: \(error.localizedDescription)"
+        }
     }
 
     public func reloadPersistence() {

@@ -8,7 +8,6 @@ DerivedData/
 *.xcworkspace
 build/
 dist/
-*.app
 *.db
 *.sqlite
 *.sqlite3

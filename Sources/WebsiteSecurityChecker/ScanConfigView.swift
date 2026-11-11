@@ -54,6 +54,23 @@ public struct ScanConfigView: View {
                             }
                         }
 
+                        HStack(spacing: 12) {
+                            Text("Quick Local Testbench Presets:")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Button("Load Built-In Vulnerable Practice Target") {
+                                vm.configureLocalPracticeTarget(vulnerable: true)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+
+                            Button("Load Built-In Hardened (A+) Practice Target") {
+                                vm.configureLocalPracticeTarget(vulnerable: false)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
                         Toggle(isOn: $vm.scanConfig.authorized) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("I confirm that I own this target domain or have explicit written permission to perform this security assessment.")
